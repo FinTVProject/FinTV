@@ -3,6 +3,7 @@ using FinTv.Configuration;
 using FinTv.Data;
 using FinTv.Domain;
 using FinTv.Services;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -153,7 +154,90 @@ public class CatalogController : ControllerBase
             tvLibraryIds = settings.TvLibraryIds,
             movieLibraryIds = settings.MovieLibraryIds,
             musicLibraryIds = settings.MusicLibraryIds,
-            musicVideoLibraryIds = settings.MusicVideoLibraryIds
+            musicVideoLibraryIds = settings.MusicVideoLibraryIds,
+            homeVideoLibraryIds = settings.HomeVideoLibraryIds
+        });
+    }
+
+    /// <summary>
+    /// Lists synced catalog rows grouped for the Jellyfin Library tables.
+    /// </summary>
+    [HttpGet("media")]
+    public async Task<ActionResult<object>> GetMedia(CancellationToken cancellationToken)
+    {
+        var rows = await _db.MediaItems.AsNoTracking()
+            .Select(item => new
+            {
+                item.Id,
+                item.Name,
+                item.Kind,
+                item.Overview,
+                item.OfficialRating,
+                item.CommunityRating,
+                item.Runtime,
+                item.RuntimeTicks,
+                item.Path,
+                item.SeriesName,
+                item.SeasonName,
+                item.IndexNumber,
+                item.ParentIndexNumber,
+                item.LibraryName,
+                item.CollectionType,
+                item.Album,
+                item.PeopleJson,
+                item.ProviderIdsJson,
+                item.ArtistsJson,
+                ChapterCount = item.Chapters.Count
+            })
+            .ToListAsync(cancellationToken);
+
+        var tvShows = new List<object>();
+        var movies = new List<object>();
+        var music = new List<object>();
+        var musicVideos = new List<object>();
+        var pastTenseNews = new List<object>();
+
+        foreach (var row in rows.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            if (row.Kind is BaseItemKind.Folder or BaseItemKind.Playlist or BaseItemKind.Season)
+            {
+                continue;
+            }
+
+            var mapped = MapMediaRow(row.Id, row.Name, row.Kind, row.Overview, row.OfficialRating, row.CommunityRating,
+                row.Runtime, row.RuntimeTicks, row.Path, row.SeriesName, row.SeasonName, row.IndexNumber,
+                row.ParentIndexNumber, row.LibraryName, row.Album, row.PeopleJson, row.ProviderIdsJson,
+                row.ArtistsJson, row.ChapterCount);
+
+            if (IsNewsItem(row.Kind, row.CollectionType, row.LibraryName))
+            {
+                pastTenseNews.Add(mapped);
+            }
+            else if (row.Kind is BaseItemKind.Episode or BaseItemKind.Series)
+            {
+                tvShows.Add(mapped);
+            }
+            else if (row.Kind == BaseItemKind.Movie)
+            {
+                movies.Add(mapped);
+            }
+            else if (row.Kind == BaseItemKind.Audio)
+            {
+                music.Add(mapped);
+            }
+            else if (row.Kind == BaseItemKind.MusicVideo)
+            {
+                musicVideos.Add(mapped);
+            }
+        }
+
+        return Ok(new
+        {
+            tvShows,
+            movies,
+            music,
+            musicVideos,
+            pastTenseNews
         });
     }
 
@@ -175,6 +259,7 @@ public class CatalogController : ControllerBase
             MovieLibraryIds = JellyfinLibrarySettings.Normalize(request?.MovieLibraryIds),
             MusicLibraryIds = JellyfinLibrarySettings.Normalize(request?.MusicLibraryIds),
             MusicVideoLibraryIds = JellyfinLibrarySettings.Normalize(request?.MusicVideoLibraryIds),
+            HomeVideoLibraryIds = JellyfinLibrarySettings.Normalize(request?.HomeVideoLibraryIds),
             Libraries = plugin.Configuration.JellyfinLibraries.Libraries
         };
         plugin.SaveConfiguration();
@@ -407,6 +492,7 @@ public class CatalogController : ControllerBase
             "movies" or "movie" => "movies",
             "music" or "audio" => "music",
             "musicvideos" or "musicvideo" => "musicvideos",
+            "homevideos" or "homevideo" or "news" => "news",
             _ => null
         };
     }
@@ -420,12 +506,12 @@ public class CatalogController : ControllerBase
         }
 
         var groups = new List<string>();
-        if (kinds.Any(kind => kind is BaseItemKind.Series or BaseItemKind.Episode))
+        if (kinds.Any(kind => kind is BaseItemKind.Series or BaseItemKind.Episode or BaseItemKind.Season))
         {
             groups.Add("tv");
         }
 
-        if (kinds.Any(kind => kind is BaseItemKind.Movie or BaseItemKind.Video))
+        if (kinds.Contains(BaseItemKind.Movie))
         {
             groups.Add("movies");
         }
@@ -440,6 +526,11 @@ public class CatalogController : ControllerBase
             groups.Add("musicvideos");
         }
 
+        if (kinds.Contains(BaseItemKind.Video))
+        {
+            groups.Add("news");
+        }
+
         return groups.ToArray();
     }
 
@@ -452,8 +543,178 @@ public class CatalogController : ControllerBase
             1 when groups[0] == "movies" => "movies",
             1 when groups[0] == "music" => "music",
             1 when groups[0] == "musicvideos" => "musicvideos",
+            1 when groups[0] == "news" => "homevideos",
             _ => null
         };
+    }
+
+    private static bool IsNewsItem(BaseItemKind kind, string? collectionType, string? libraryName)
+    {
+        if (kind == BaseItemKind.Video)
+        {
+            return true;
+        }
+
+        if (LibraryGroupForType(collectionType) == "news")
+        {
+            return true;
+        }
+
+        var name = libraryName ?? string.Empty;
+        return name.Contains("news", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("past tense", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static object MapMediaRow(
+        Guid id,
+        string? name,
+        BaseItemKind kind,
+        string? overview,
+        string? officialRating,
+        float? communityRating,
+        string? runtime,
+        long? runtimeTicks,
+        string? path,
+        string? seriesName,
+        string? seasonName,
+        int? indexNumber,
+        int? parentIndexNumber,
+        string? libraryName,
+        string? album,
+        string? peopleJson,
+        string? providerIdsJson,
+        string? artistsJson,
+        int chapterCount)
+    {
+        var stars = ReadStars(peopleJson, artistsJson);
+        var ids = FormatIds(id, providerIdsJson);
+        var plot = string.IsNullOrWhiteSpace(overview)
+            ? string.Empty
+            : overview.Trim();
+        if (plot.Length > 240)
+        {
+            plot = plot[..237] + "...";
+        }
+
+        var title = name ?? string.Empty;
+        if (kind == BaseItemKind.Episode && !string.IsNullOrWhiteSpace(seriesName))
+        {
+            var episode = parentIndexNumber.HasValue && indexNumber.HasValue
+                ? $"S{parentIndexNumber.Value:00}E{indexNumber.Value:00}"
+                : seasonName;
+            title = string.IsNullOrWhiteSpace(episode)
+                ? $"{seriesName} · {title}"
+                : $"{seriesName} · {episode} · {title}";
+        }
+        else if (!string.IsNullOrWhiteSpace(album) && kind == BaseItemKind.Audio)
+        {
+            title = $"{name} ({album})";
+        }
+
+        return new
+        {
+            id,
+            name = title,
+            runtime = string.IsNullOrWhiteSpace(runtime) ? FormatRuntime(runtimeTicks) : runtime,
+            chapters = chapterCount == 0 ? string.Empty : $"{chapterCount}",
+            rating = FormatRating(officialRating, communityRating),
+            plot,
+            stars,
+            path = path ?? string.Empty,
+            ids,
+            libraryName = libraryName ?? string.Empty
+        };
+    }
+
+    private static string ReadStars(string? peopleJson, string? artistsJson)
+    {
+        var names = new List<string>();
+        try
+        {
+            var people = JsonSerializer.Deserialize<List<CatalogPersonDto>>(peopleJson ?? "[]") ?? [];
+            names.AddRange(people
+                .Where(person =>
+                    string.Equals(person.Type, "Actor", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(person.Type, "GuestStar", StringComparison.OrdinalIgnoreCase)
+                    || string.IsNullOrWhiteSpace(person.Type))
+                .Select(person => person.Name)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Cast<string>());
+        }
+        catch
+        {
+            // ignore malformed people json from older syncs
+        }
+
+        if (names.Count == 0)
+        {
+            try
+            {
+                names.AddRange(JsonSerializer.Deserialize<List<string>>(artistsJson ?? "[]") ?? []);
+            }
+            catch
+            {
+                // ignore malformed artists json
+            }
+        }
+
+        return string.Join(", ", names.Distinct(StringComparer.OrdinalIgnoreCase).Take(8));
+    }
+
+    private static string FormatIds(Guid id, string? providerIdsJson)
+    {
+        var parts = new List<string> { id.ToString("N") };
+        try
+        {
+            var ids = JsonSerializer.Deserialize<Dictionary<string, string>>(providerIdsJson ?? "{}")
+                ?? new Dictionary<string, string>();
+            foreach (var pair in ids.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Take(4))
+            {
+                parts.Add($"{pair.Key} {pair.Value}");
+            }
+        }
+        catch
+        {
+            // ignore malformed provider id json
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private static string FormatRating(string? official, float? community)
+    {
+        if (!string.IsNullOrWhiteSpace(official) && community.HasValue)
+        {
+            return $"{official} · {community.Value:0.0}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(official))
+        {
+            return official!;
+        }
+
+        return community.HasValue ? community.Value.ToString("0.0") : string.Empty;
+    }
+
+    private static string? FormatRuntime(long? ticks)
+    {
+        if (ticks is not > 0)
+        {
+            return null;
+        }
+
+        var time = TimeSpan.FromTicks(ticks.Value);
+        if (time.TotalHours >= 1)
+        {
+            return $"{(int)time.TotalHours}h {time.Minutes:00}m";
+        }
+
+        if (time.TotalMinutes >= 1)
+        {
+            return $"{(int)time.TotalMinutes}m {time.Seconds:00}s";
+        }
+
+        return $"{time.Seconds}s";
     }
 
     private static object MapSearchResult(BaseItem item)
@@ -533,4 +794,6 @@ public class JellyfinLibrarySettingsRequest
     public List<Guid>? MusicLibraryIds { get; set; }
 
     public List<Guid>? MusicVideoLibraryIds { get; set; }
+
+    public List<Guid>? HomeVideoLibraryIds { get; set; }
 }

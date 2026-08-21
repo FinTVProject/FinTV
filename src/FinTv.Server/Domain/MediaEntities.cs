@@ -48,6 +48,28 @@ public class MediaItem
 
     public string CollectionNamesJson { get; set; } = "[]";
 
+    public float? CommunityRating { get; set; }
+
+    public float? CriticRating { get; set; }
+
+    public string? Runtime { get; set; }
+
+    public string? Album { get; set; }
+
+    public string? MediaType { get; set; }
+
+    public Guid? SeasonId { get; set; }
+
+    public string? SeasonName { get; set; }
+
+    public string? PeopleJson { get; set; }
+
+    public string? ProviderIdsJson { get; set; }
+
+    public string? ArtistsJson { get; set; }
+
+    public string? AlbumArtistsJson { get; set; }
+
     public DateTime SyncedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<MediaChapter> Chapters { get; set; } = new List<MediaChapter>();

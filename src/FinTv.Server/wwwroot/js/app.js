@@ -4224,7 +4224,9 @@
             renderJellyfinLibraryGroup('jf-lib-movies', libraries, data.movieLibraryIds, 'movies');
             renderJellyfinLibraryGroup('jf-lib-music', libraries, data.musicLibraryIds, 'music');
             renderJellyfinLibraryGroup('jf-lib-musicvideos', libraries, data.musicVideoLibraryIds, 'musicvideos');
+            renderJellyfinLibraryGroup('jf-lib-news', libraries, data.homeVideoLibraryIds, 'news');
             decorateCheckboxes();
+            await loadCatalogMedia();
         } catch (err) {
             reportApiError(err, 'Could not load Jellyfin libraries.');
         }
@@ -4237,11 +4239,65 @@
                 tvLibraryIds: selectedLibraryIds('jf-lib-tv'),
                 movieLibraryIds: selectedLibraryIds('jf-lib-movies'),
                 musicLibraryIds: selectedLibraryIds('jf-lib-music'),
-                musicVideoLibraryIds: selectedLibraryIds('jf-lib-musicvideos')
+                musicVideoLibraryIds: selectedLibraryIds('jf-lib-musicvideos'),
+                homeVideoLibraryIds: selectedLibraryIds('jf-lib-news')
             })
         });
         toast('Jellyfin libraries saved.', 'success');
         await loadJellyfinLibraries();
+    }
+
+    async function loadCatalogMedia() {
+        try {
+            const data = await api('/catalog/media') || {};
+            renderCatalogMediaTable('jf-media-tv', data.tvShows);
+            renderCatalogMediaTable('jf-media-movies', data.movies);
+            renderCatalogMediaTable('jf-media-music', data.music);
+            renderCatalogMediaTable('jf-media-musicvideos', data.musicVideos);
+            renderCatalogMediaTable('jf-media-news', data.pastTenseNews);
+        } catch (err) {
+            reportApiError(err, 'Could not load synced catalog media.');
+        }
+    }
+
+    function renderCatalogMediaTable(containerId, rows) {
+        const el = $(containerId);
+        if (!el) {
+            return;
+        }
+
+        const items = Array.isArray(rows) ? rows : [];
+        if (!items.length) {
+            el.innerHTML = '<div class="empty-state">No synced items yet. Send libraries from the Jellyfin plugin, then run catalog sync.</div>';
+            return;
+        }
+
+        el.innerHTML = `<table class="data-table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Runtime</th>
+                    <th>Chapters</th>
+                    <th>Rating</th>
+                    <th>Plot</th>
+                    <th>Stars</th>
+                    <th>Jellyfin path</th>
+                    <th>IDs</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map((row) => `<tr>
+                    <td>${escapeHtml(row.name || '')}</td>
+                    <td>${escapeHtml(row.runtime || '')}</td>
+                    <td>${escapeHtml(row.chapters || '')}</td>
+                    <td>${escapeHtml(row.rating || '')}</td>
+                    <td class="catalog-plot" title="${escapeHtml(row.plot || '')}">${escapeHtml(row.plot || '')}</td>
+                    <td>${escapeHtml(row.stars || '')}</td>
+                    <td class="catalog-path" title="${escapeHtml(row.path || '')}">${escapeHtml(row.path || '')}</td>
+                    <td class="catalog-ids" title="${escapeHtml(row.ids || '')}">${escapeHtml(row.ids || '')}</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`;
     }
 
     function renderListsTable() {

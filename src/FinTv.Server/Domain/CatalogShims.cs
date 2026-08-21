@@ -96,6 +96,11 @@ public class CollectionFolder : BaseItem
     public CollectionFolder() => Kind = BaseItemKind.Folder;
 }
 
+public class Season : BaseItem
+{
+    public Season() => Kind = BaseItemKind.Season;
+}
+
 public class Playlist : BaseItem
 {
     public Playlist() => Kind = BaseItemKind.Playlist;
@@ -110,7 +115,8 @@ public enum BaseItemKind
     Audio = 4,
     Playlist = 5,
     Folder = 6,
-    Video = 7
+    Video = 7,
+    Season = 8
 }
 
 public enum ImageType

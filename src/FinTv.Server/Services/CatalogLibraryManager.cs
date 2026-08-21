@@ -145,6 +145,7 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
             BaseItemKind.Audio => new Audio(),
             BaseItemKind.Playlist => new Playlist(),
             BaseItemKind.Folder => new CollectionFolder { CollectionType = row.CollectionType },
+            BaseItemKind.Season => new Season(),
             _ => new BaseItem()
         };
 

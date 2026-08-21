@@ -215,6 +215,8 @@ public class JellyfinLibrarySettings
 
     public List<Guid> MusicVideoLibraryIds { get; set; } = new();
 
+    public List<Guid> HomeVideoLibraryIds { get; set; } = new();
+
     /// <summary>
     /// Jellyfin libraries reported by the plugin (name, id, and type).
     /// </summary>
@@ -229,10 +231,11 @@ public class JellyfinLibrarySettings
 
         var selected = kind switch
         {
-            BaseItemKind.Series or BaseItemKind.Episode => TvLibraryIds,
+            BaseItemKind.Series or BaseItemKind.Episode or BaseItemKind.Season => TvLibraryIds,
             BaseItemKind.Movie => MovieLibraryIds,
             BaseItemKind.Audio => MusicLibraryIds,
             BaseItemKind.MusicVideo => MusicVideoLibraryIds,
+            BaseItemKind.Video => HomeVideoLibraryIds,
             _ => null
         };
 

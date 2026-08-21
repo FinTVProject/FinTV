@@ -24,6 +24,7 @@ public class DatabaseInitializer : IHostedService
         await db.Database.EnsureCreatedAsync(cancellationToken);
         await EnsureNewsColumnsAsync(db, cancellationToken);
         await EnsureChannelColumnsAsync(db, cancellationToken);
+        await EnsureMediaItemColumnsAsync(db, cancellationToken);
 
         if (!await db.AppSettings.AnyAsync(cancellationToken))
         {
@@ -91,6 +92,36 @@ public class DatabaseInitializer : IHostedService
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Channel schema ensure skipped");
+        }
+    }
+
+    private async Task EnsureMediaItemColumnsAsync(FinTvDbContext db, CancellationToken cancellationToken)
+    {
+        var statements = new[]
+        {
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "CommunityRating" real NULL""",
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "CriticRating" real NULL""",
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "Runtime" text NULL""",
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "Album" text NULL""",
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "MediaType" text NULL""",
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "SeasonId" uuid NULL""",
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "SeasonName" text NULL""",
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "PeopleJson" text NULL""",
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "ProviderIdsJson" text NULL""",
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "ArtistsJson" text NULL""",
+            """ALTER TABLE "MediaItems" ADD COLUMN IF NOT EXISTS "AlbumArtistsJson" text NULL"""
+        };
+
+        foreach (var sql in statements)
+        {
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "MediaItem schema ensure skipped for {Sql}", sql);
+            }
         }
     }
 }

@@ -48,26 +48,40 @@ public class PluginBridgeController : ControllerBase
 
             row.Name = item.Name ?? string.Empty;
             row.SortName = item.SortName;
-            row.Overview = item.Overview;
+            row.Overview = string.IsNullOrWhiteSpace(item.Overview) ? item.Plot : item.Overview;
             row.Kind = item.Kind;
-            row.Path = item.Path;
+            row.Path = string.IsNullOrWhiteSpace(item.Path) ? item.JellyfinPath : item.Path;
             row.ParentId = item.ParentId;
             row.SeriesId = item.SeriesId;
             row.SeriesName = item.SeriesName;
             row.ProductionYear = item.ProductionYear;
             row.PremiereDate = item.PremiereDate;
             row.OfficialRating = item.OfficialRating;
+            row.CommunityRating = item.CommunityRating;
+            row.CriticRating = item.CriticRating;
             row.RuntimeTicks = item.RuntimeTicks;
+            row.Runtime = string.IsNullOrWhiteSpace(item.Runtime) ? FormatRuntime(item.RuntimeTicks) : item.Runtime;
             row.IndexNumber = item.IndexNumber;
             row.ParentIndexNumber = item.ParentIndexNumber;
             row.LibraryId = item.LibraryId;
             row.LibraryName = item.LibraryName;
             row.CollectionType = item.CollectionType;
             row.PrimaryImagePath = item.PrimaryImagePath;
+            row.Album = item.Album;
+            row.MediaType = item.MediaType;
+            row.SeasonId = item.SeasonId;
+            row.SeasonName = item.SeasonName;
             row.GenresJson = JsonSerializer.Serialize(item.Genres ?? []);
             row.TagsJson = JsonSerializer.Serialize(item.Tags ?? []);
             row.StudiosJson = JsonSerializer.Serialize(item.Studios ?? []);
             row.CollectionNamesJson = JsonSerializer.Serialize(item.CollectionNames ?? []);
+            row.PeopleJson = JsonSerializer.Serialize(
+                item.People is { Count: > 0 }
+                    ? item.People
+                    : (item.Stars ?? []).Select(name => new CatalogPersonDto { Name = name, Type = "Actor" }));
+            row.ProviderIdsJson = JsonSerializer.Serialize(item.ProviderIds ?? new Dictionary<string, string>());
+            row.ArtistsJson = JsonSerializer.Serialize(item.Artists ?? []);
+            row.AlbumArtistsJson = JsonSerializer.Serialize(item.AlbumArtists ?? []);
             row.SyncedAt = DateTime.UtcNow;
 
             _db.MediaChapters.RemoveRange(row.Chapters);
@@ -119,6 +133,7 @@ public class PluginBridgeController : ControllerBase
             movieLibraryIds = settings.MovieLibraryIds,
             musicLibraryIds = settings.MusicLibraryIds,
             musicVideoLibraryIds = settings.MusicVideoLibraryIds,
+            homeVideoLibraryIds = settings.HomeVideoLibraryIds,
             libraries = settings.Libraries
         });
     }
@@ -188,6 +203,27 @@ public class PluginBridgeController : ControllerBase
         plugin.Configuration.JellyfinLibraries.Libraries = normalized;
         plugin.SaveConfiguration();
         return normalized;
+    }
+
+    private static string? FormatRuntime(long? ticks)
+    {
+        if (ticks is not > 0)
+        {
+            return null;
+        }
+
+        var time = TimeSpan.FromTicks(ticks.Value);
+        if (time.TotalHours >= 1)
+        {
+            return $"{(int)time.TotalHours}h {time.Minutes:00}m";
+        }
+
+        if (time.TotalMinutes >= 1)
+        {
+            return $"{(int)time.TotalMinutes}m {time.Seconds:00}s";
+        }
+
+        return $"{time.Seconds}s";
     }
 }
 
@@ -373,7 +409,15 @@ public class CatalogItemDto
 
     public string? OfficialRating { get; set; }
 
+    public float? CommunityRating { get; set; }
+
+    public float? CriticRating { get; set; }
+
+    public string? CustomRating { get; set; }
+
     public long? RuntimeTicks { get; set; }
+
+    public string? Runtime { get; set; }
 
     public int? IndexNumber { get; set; }
 
@@ -387,6 +431,20 @@ public class CatalogItemDto
 
     public string? PrimaryImagePath { get; set; }
 
+    public string? Album { get; set; }
+
+    public string? MediaType { get; set; }
+
+    public Guid? SeasonId { get; set; }
+
+    public string? SeasonName { get; set; }
+
+    public Guid? JellyfinId { get; set; }
+
+    public string? JellyfinPath { get; set; }
+
+    public string? Plot { get; set; }
+
     public List<string>? Genres { get; set; }
 
     public List<string>? Tags { get; set; }
@@ -395,7 +453,26 @@ public class CatalogItemDto
 
     public List<string>? CollectionNames { get; set; }
 
+    public List<string>? Artists { get; set; }
+
+    public List<string>? AlbumArtists { get; set; }
+
+    public List<string>? Stars { get; set; }
+
+    public List<CatalogPersonDto>? People { get; set; }
+
+    public Dictionary<string, string>? ProviderIds { get; set; }
+
     public List<CatalogChapterDto>? Chapters { get; set; }
+}
+
+public class CatalogPersonDto
+{
+    public string? Name { get; set; }
+
+    public string? Role { get; set; }
+
+    public string? Type { get; set; }
 }
 
 public class CatalogChapterDto
