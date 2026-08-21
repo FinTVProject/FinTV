@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FinTv;
 using FinTv.Api;
 using FinTv.Data;
 using FinTv.Domain;
@@ -7,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FinTv.Services;
 
 /// <summary>
-/// Writes synced Jellyfin items into TvShows, Movies, Music, MusicVideos, and PastTenseNews.
+/// Writes synced Jellyfin items into TvShows, Episodes, Movies, Music, MusicVideos, and PastTenseNews.
 /// </summary>
 public sealed class CatalogTypedStore
 {
@@ -24,6 +25,7 @@ public sealed class CatalogTypedStore
         var incomingIds = items.Select(item => item.Id).ToHashSet();
 
         var tv = await _db.TvShows.Where(row => incomingIds.Contains(row.Id)).ToDictionaryAsync(row => row.Id, cancellationToken);
+        var episodes = await _db.Episodes.Where(row => incomingIds.Contains(row.Id)).ToDictionaryAsync(row => row.Id, cancellationToken);
         var movies = await _db.Movies.Where(row => incomingIds.Contains(row.Id)).ToDictionaryAsync(row => row.Id, cancellationToken);
         var music = await _db.Music.Where(row => incomingIds.Contains(row.Id)).ToDictionaryAsync(row => row.Id, cancellationToken);
         var videos = await _db.MusicVideos.Where(row => incomingIds.Contains(row.Id)).ToDictionaryAsync(row => row.Id, cancellationToken);
@@ -38,6 +40,7 @@ public sealed class CatalogTypedStore
             }
 
             RemoveIfPresent(tv, _db.TvShows, item.Id, keep: target == CatalogTable.TvShows);
+            RemoveIfPresent(episodes, _db.Episodes, item.Id, keep: target == CatalogTable.Episodes);
             RemoveIfPresent(movies, _db.Movies, item.Id, keep: target == CatalogTable.Movies);
             RemoveIfPresent(music, _db.Music, item.Id, keep: target == CatalogTable.Music);
             RemoveIfPresent(videos, _db.MusicVideos, item.Id, keep: target == CatalogTable.MusicVideos);
@@ -46,7 +49,10 @@ public sealed class CatalogTypedStore
             switch (target)
             {
                 case CatalogTable.TvShows:
-                    ApplyTv(GetOrAdd(tv, _db.TvShows, item.Id), item);
+                    Apply(GetOrAdd(tv, _db.TvShows, item.Id), item);
+                    break;
+                case CatalogTable.Episodes:
+                    ApplyEpisode(GetOrAdd(episodes, _db.Episodes, item.Id), item);
                     break;
                 case CatalogTable.Movies:
                     Apply(GetOrAdd(movies, _db.Movies, item.Id), item);
@@ -67,6 +73,7 @@ public sealed class CatalogTypedStore
     public async Task BackfillFromMediaItemsAsync(CancellationToken cancellationToken)
     {
         var hasTyped = await _db.TvShows.AnyAsync(cancellationToken)
+            || await _db.Episodes.AnyAsync(cancellationToken)
             || await _db.Movies.AnyAsync(cancellationToken)
             || await _db.Music.AnyAsync(cancellationToken)
             || await _db.MusicVideos.AnyAsync(cancellationToken)
@@ -100,7 +107,8 @@ public sealed class CatalogTypedStore
 
         return item.Kind switch
         {
-            BaseItemKind.Series or BaseItemKind.Episode => CatalogTable.TvShows,
+            BaseItemKind.Series => CatalogTable.TvShows,
+            BaseItemKind.Episode => CatalogTable.Episodes,
             BaseItemKind.Movie or BaseItemKind.Video => CatalogTable.Movies,
             BaseItemKind.Audio => CatalogTable.Music,
             BaseItemKind.MusicVideo => CatalogTable.MusicVideos,
@@ -133,14 +141,15 @@ public sealed class CatalogTypedStore
         return row;
     }
 
-    private static void ApplyTv(TvShowRow row, CatalogItemDto item)
+    private static void ApplyEpisode(EpisodeRow row, CatalogItemDto item)
     {
         Apply(row, item);
         row.SeriesId = item.SeriesId;
         row.SeriesName = item.SeriesName;
+        row.SeasonId = item.SeasonId;
+        row.SeasonName = item.SeasonName;
         row.SeasonNumber = item.ParentIndexNumber;
         row.EpisodeNumber = item.IndexNumber;
-        row.IsSeries = item.Kind == BaseItemKind.Series;
     }
 
     private static void ApplyMusic(MusicRow row, CatalogItemDto item)
@@ -226,8 +235,12 @@ public sealed class CatalogTypedStore
     }
 
     private static bool IsPastTenseNews(CatalogItemDto item)
-        => !string.IsNullOrWhiteSpace(item.LibraryName)
-            && item.LibraryName.Contains("Past Tense News", StringComparison.OrdinalIgnoreCase);
+        => PastTenseNewsCatalog.IsHomeMovieItem(
+            item.LibraryName,
+            item.CollectionType,
+            item.LibraryId,
+            item.Kind,
+            FinTvRuntime.Current?.Configuration.JellyfinLibraries.HomeVideoLibraryIds);
 
     private static string? FindProvider(Dictionary<string, string> providers, params string[] keys)
     {
@@ -254,6 +267,8 @@ public sealed class CatalogTypedStore
             Path = item.Path,
             SeriesId = item.SeriesId,
             SeriesName = item.SeriesName,
+            SeasonId = item.SeasonId,
+            SeasonName = item.SeasonName,
             ProductionYear = item.ProductionYear,
             PremiereDate = item.PremiereDate,
             OfficialRating = item.OfficialRating,
@@ -288,6 +303,7 @@ public sealed class CatalogTypedStore
     private enum CatalogTable
     {
         TvShows,
+        Episodes,
         Movies,
         Music,
         MusicVideos,

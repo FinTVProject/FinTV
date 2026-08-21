@@ -363,7 +363,7 @@
                         </section>
                         <section class="library-pick-card">
                             <h4>Past Tense News</h4>
-                            <p class="hint">Home video or news libraries</p>
+                            <p class="hint">Home movie libraries (Home Movies, Home Videos, or Past Tense News)</p>
                             <div id="jf-lib-news" class="library-pick-list"></div>
                         </section>
                     </div>
@@ -709,19 +709,24 @@
             <section id="tab-weather" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <h3>WeatherStar live channels</h3>
-                    <p class="hint">Only one WeatherStar runs at a time. WS4000 and WS3000 stay on loopback inside FinTV; they are not a public website.</p>
+                    <p class="hint">Weather channels are a native MPEG-TS loop (Star fonts and screens). No Chromium. Pick WeatherStar 4000 or 3000 per channel name/preset. Location can be a US ZIP, a city, or latitude,longitude.</p>
                     <div id="weather-renderer-status" class="status-card"></div>
                     <label class="field">
-                        <span>WeatherStar</span>
+                        <span>WeatherStar look</span>
                         <select id="weather-star-variant" class="emby-select">
                             <option value="ws4kp">WeatherStar 4000</option>
                             <option value="ws3kp">WeatherStar 3000</option>
                         </select>
                     </label>
-                    <div class="actions">
-                        <button type="button" id="btn-weather-renderer-start" class="raised button-submit emby-button">Start renderer</button>
-                    </div>
-                    <p class="hint">Apply a weather preset, then set each channel&apos;s ZIP code below. Tuning a 4000 or 3000 channel switches to that WeatherStar. Background music comes from a Jellyfin music library (falls back to EBS music).</p>
+                    <label class="field">
+                        <span>Weather source</span>
+                        <select id="weather-source" class="emby-select">
+                            <option value="auto" selected>Auto (NOAA in the US, Open-Meteo worldwide)</option>
+                            <option value="us">United States (NOAA)</option>
+                            <option value="world">World (Open-Meteo)</option>
+                        </select>
+                    </label>
+                    <p class="hint">Apply a weather preset, then set each channel&apos;s location below. Background music comes from a Jellyfin music library (falls back to EBS music).</p>
                 </div>
                 <div class="card section-card">
                     <h3>Background music</h3>
@@ -737,10 +742,10 @@
                 </div>
                 <div class="card section-card">
                     <h3>Location</h3>
-                    <p class="hint">WeatherStar looks up NWS data by US ZIP code. Each weather channel can have its own ZIP. New weather channels use the default ZIP.</p>
+                    <p class="hint">WeatherStar looks up NWS data for US ZIPs and Open-Meteo for the rest of the world. Each weather channel can have its own location. New weather channels use the default.</p>
                     <label class="field">
-                        <span>Default ZIP code</span>
-                        <input id="weather-default-zip" type="text" class="emby-input" inputmode="numeric" maxlength="10" placeholder="50317" autocomplete="postal-code">
+                        <span>Default location</span>
+                        <input id="weather-default-zip" type="text" class="emby-input" placeholder="50317 or London, UK" autocomplete="off">
                     </label>
                     <div id="weather-zip-list" class="weather-zip-list"></div>
                 </div>

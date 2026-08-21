@@ -561,8 +561,9 @@ public class CatalogController : ControllerBase
         }
 
         var name = libraryName ?? string.Empty;
-        return name.Contains("news", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("past tense", StringComparison.OrdinalIgnoreCase);
+        return PastTenseNewsCatalog.MatchesLibraryName(name)
+            || PastTenseNewsCatalog.MatchesCollectionType(collectionType)
+            || name.Contains("news", StringComparison.OrdinalIgnoreCase);
     }
 
     private static object MapMediaRow(

@@ -6,6 +6,7 @@ using FinTv.Domain;
 using FinTv.News;
 using FinTv.Services;
 using FinTv.Streaming;
+using FinTv.Weather;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 
@@ -63,6 +64,11 @@ builder.Services.AddHttpClient(nameof(CommercialBrainzClient))
         client.Timeout = TimeSpan.FromMinutes(5);
         client.DefaultRequestHeaders.UserAgent.ParseAdd("FinTV/0.0.3 (CommercialBrainz)");
     });
+builder.Services.AddHttpClient("Weather", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(25);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("FinTV/1.0 (https://github.com/FinTVProject/FinTV)");
+});
 builder.Services.AddHttpClient();
 
 builder.Services.AddSingleton<FinTvRuntime>();
@@ -74,7 +80,10 @@ builder.Services.AddSingleton<FfmpegEncodingService>();
 builder.Services.AddSingleton<FfmpegCommandBuilder>();
 builder.Services.AddSingleton<YtDlpLocator>();
 builder.Services.AddSingleton<StreamService>();
-builder.Services.AddSingleton<WeatherRendererHost>();
+builder.Services.AddSingleton<WeatherGeocoder>();
+builder.Services.AddSingleton<WeatherDataClient>();
+builder.Services.AddSingleton<WeatherStarAssets>();
+builder.Services.AddSingleton<WeatherStarCompositor>();
 builder.Services.AddSingleton<AiChannelGenerateJobService>();
 builder.Services.AddSingleton<AiLineupAutoApplyTask>();
 builder.Services.AddSingleton<CatalogCleanupTask>();
@@ -117,7 +126,6 @@ builder.Services.AddScoped<WeatherStarChannelService>();
 builder.Services.AddScoped<NewsChannelService>();
 
 builder.Services.AddHostedService<DatabaseInitializer>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<WeatherRendererHost>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PlayoutBuilderService>());
 builder.Services.AddHostedService<ScheduledTaskHost>();
 builder.Services.AddHostedService<NewsRefreshHostedService>();

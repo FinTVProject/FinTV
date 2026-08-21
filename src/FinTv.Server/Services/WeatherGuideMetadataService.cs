@@ -554,16 +554,23 @@ internal static class WeatherLocationParser
         return match.Success ? match.Groups[1].Value : null;
     }
 
-    public static string NormalizeZip(string? zip)
+    public static string NormalizeZip(string? zip) => NormalizeLocation(zip);
+
+    public static string NormalizeLocation(string? location)
     {
-        var trimmed = (zip ?? string.Empty).Trim();
-        var match = Regex.Match(trimmed, @"^(\d{5})(?:-\d{4})?$");
-        if (!match.Success)
+        var trimmed = (location ?? string.Empty).Trim();
+        if (trimmed.Length < 2)
         {
-            throw new ArgumentException("Enter a 5-digit US ZIP code.");
+            throw new ArgumentException("Enter a US ZIP, city, or latitude,longitude.");
         }
 
-        return match.Groups[1].Value;
+        var zipOnly = Regex.Match(trimmed, @"^(\d{5})(?:-\d{4})?$");
+        if (zipOnly.Success)
+        {
+            return zipOnly.Groups[1].Value;
+        }
+
+        return trimmed;
     }
 
     private static bool LooksNumeric(string value)

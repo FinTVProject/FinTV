@@ -1,6 +1,7 @@
 using System.Threading.Channels;
 using FinTv.Domain;
 using FinTv.Streaming;
+using FinTv.Weather;
 using Microsoft.Extensions.Logging;
 
 namespace FinTv.Services;
@@ -41,81 +42,84 @@ public class WeatherStarChannelService
 
     private readonly ILogger<WeatherStarChannelService> _logger;
     private readonly FfmpegCommandBuilder _ffmpegBuilder;
-    private readonly FfmpegEncodingService _encoding;
     private readonly EbsService _ebs;
     private readonly IFfmpegLocator _mediaEncoder;
-    private readonly WeatherRendererHost _renderer;
     private readonly JellyfinCatalogService _catalog;
-    private readonly IHttpClientFactory _http;
+    private readonly WeatherDataClient _weather;
+    private readonly WeatherStarCompositor _compositor;
 
     public WeatherStarChannelService(
         ILogger<WeatherStarChannelService> logger,
         FfmpegCommandBuilder ffmpegBuilder,
-        FfmpegEncodingService encoding,
         EbsService ebs,
         IFfmpegLocator mediaEncoder,
-        WeatherRendererHost renderer,
         JellyfinCatalogService catalog,
-        IHttpClientFactory http)
+        WeatherDataClient weather,
+        WeatherStarCompositor compositor)
     {
         _logger = logger;
         _ffmpegBuilder = ffmpegBuilder;
-        _encoding = encoding;
         _ebs = ebs;
         _mediaEncoder = mediaEncoder;
-        _renderer = renderer;
         _catalog = catalog;
-        _http = http;
+        _weather = weather;
+        _compositor = compositor;
     }
 
     public async Task StreamAsync(Domain.Channel channel, Stream output, CancellationToken cancellationToken)
     {
-        var variant = ResolveVariant(channel);
-        await _renderer.EnsureRunningAsync(variant, cancellationToken);
-        await _renderer.WaitUntilReadyAsync(variant, cancellationToken);
-
         var locationQuery = string.IsNullOrWhiteSpace(channel.WeatherLocationQuery)
             ? DefaultWeatherLocationQuery
             : channel.WeatherLocationQuery.Trim();
-        var permalinkQuery = FinTvRuntime.Current?.Configuration.WeatherStarPermalinkQuery;
-        var autoWideForSixteenNine = FinTvRuntime.Current?.Configuration.WeatherStarAutoWideForSixteenNine ?? true;
-        var baseUrl = variant == WeatherStarDockerVariant.Ws3kp
-            ? "http://127.0.0.1:8083"
-            : "http://127.0.0.1:8080";
-        var weatherPageUrl = BuildWeatherPageUrl(
-            locationQuery,
-            baseUrl,
-            permalinkQuery,
-            autoWideForSixteenNine,
-            channel.AspectRatio);
+        var config = FinTvRuntime.Current?.Configuration;
+        var permalinkQuery = config?.WeatherStarPermalinkQuery;
+        var source = WeatherDataClient.ParseSource(config?.WeatherSource);
+        var useMetric = PermalinkUsesMetric(permalinkQuery);
         var (width, height) = GetResolution(channel);
         var ffmpegPath = _mediaEncoder.EncoderPath;
         var backgroundMusicPath = ResolveWeatherMusicPath();
+        var skin = ResolveVariant(channel);
+        var sequencer = new WeatherStarSequencer(
+            permalinkQuery,
+            skin,
+            channel.AspectRatio != AspectRatioMode.FourThree && (config?.WeatherStarAutoWideForSixteenNine ?? true),
+            channel.ScanlinesEnabled);
 
-        if (ChromiumCdpCapture.FindChromium() is null)
+        WeatherSnapshot snap;
+        try
         {
-            _logger.LogWarning("Chromium not found; using NOAA overlay fallback for {Channel}", channel.Name);
-            await StreamNoaaFallbackAsync(channel, locationQuery, ffmpegPath, backgroundMusicPath, output, cancellationToken);
+            snap = await _weather.GetSnapshotAsync(locationQuery, source, useMetric, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Weather data failed for {Channel}; using EBS slate", channel.Name);
+            await WriteEbsFallbackAsync(channel, ffmpegPath, output, cancellationToken);
             return;
         }
 
-        await using var capture = new ChromiumCdpCapture(_logger);
         try
         {
-            await capture.StartAsync(weatherPageUrl, width, height, cancellationToken);
             using var frameStream = new ScreenshotFrameStream();
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var ffmpegStderr = new System.Text.StringBuilder();
-
+            var started = DateTime.UtcNow;
             var ffmpegTask = CliWrap.Cli.Wrap(ffmpegPath)
                 .WithArguments(_ffmpegBuilder.BuildWeatherCommand(width, height, CaptureFps, backgroundMusicPath))
                 .WithStandardInputPipe(CliWrap.PipeSource.FromStream(frameStream))
                 .WithStandardOutputPipe(CliWrap.PipeTarget.ToStream(output, autoFlush: true))
-                .WithStandardErrorPipe(CliWrap.PipeTarget.ToStringBuilder(ffmpegStderr))
                 .WithValidation(CliWrap.CommandResultValidation.None)
                 .ExecuteAsync(linkedCts.Token);
 
-            var pumpTask = PumpFramesAsync(capture, weatherPageUrl, frameStream, linkedCts.Token);
+            var pumpTask = PumpFramesAsync(
+                snap,
+                locationQuery,
+                source,
+                useMetric,
+                sequencer,
+                width,
+                height,
+                frameStream,
+                started,
+                linkedCts.Token);
             var completed = await Task.WhenAny(ffmpegTask, pumpTask);
             if (completed == pumpTask)
             {
@@ -135,7 +139,7 @@ public class WeatherStarChannelService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "WeatherStar renderer failed, using EBS slate");
+            _logger.LogWarning(ex, "WeatherStar compositor failed, using EBS slate");
             await WriteEbsFallbackAsync(channel, ffmpegPath, output, cancellationToken);
         }
     }
@@ -315,98 +319,64 @@ public class WeatherStarChannelService
     }
 
     private async Task PumpFramesAsync(
-        ChromiumCdpCapture capture,
-        string weatherPageUrl,
+        WeatherSnapshot snap,
+        string locationQuery,
+        WeatherSourceKind source,
+        bool useMetric,
+        WeatherStarSequencer sequencer,
+        int width,
+        int height,
         ScreenshotFrameStream frameStream,
+        DateTime started,
         CancellationToken cancellationToken)
     {
-        _ = weatherPageUrl;
         var frameDelay = TimeSpan.FromSeconds(1.0 / CaptureFps);
+        var current = snap;
         while (!cancellationToken.IsCancellationRequested)
         {
-            var jpeg = await capture.CaptureJpegAsync(cancellationToken);
+            if (DateTimeOffset.UtcNow - current.FetchedAt > TimeSpan.FromMinutes(8))
+            {
+                try
+                {
+                    current = await _weather.GetSnapshotAsync(locationQuery, source, useMetric, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogDebug(ex, "Weather snapshot refresh failed; keeping previous frame data");
+                }
+            }
+
+            var (screen, radarIndex) = sequencer.At(DateTime.UtcNow - started);
+            var jpeg = _compositor.RenderJpeg(current, screen, sequencer.Skin, width, height, sequencer.Scanlines, radarIndex);
             await frameStream.WriteFrameAsync(jpeg, cancellationToken);
             await Task.Delay(frameDelay, cancellationToken);
         }
     }
 
-    private async Task StreamNoaaFallbackAsync(
-        Domain.Channel channel,
-        string locationQuery,
-        string ffmpegPath,
-        string? musicPath,
-        Stream output,
-        CancellationToken cancellationToken)
+    private static bool PermalinkUsesMetric(string? query)
     {
-        var (width, height) = GetResolution(channel);
-        var headline = "Local Weather";
-        var detail = locationQuery;
-        try
+        if (string.IsNullOrWhiteSpace(query))
         {
-            if (WeatherLocationParser.TryParseLatLon(locationQuery, out var lat, out var lon))
+            return false;
+        }
+
+        foreach (var segment in query.Trim().TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var sep = segment.IndexOf('=');
+            if (sep < 0)
             {
-                var client = _http.CreateClient();
-                client.DefaultRequestHeaders.UserAgent.ParseAdd("FinTV/0.0.3 (weather)");
-                var points = await client.GetStringAsync(
-                    $"https://api.weather.gov/points/{lat.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
-                    cancellationToken);
-                using var pointsDoc = System.Text.Json.JsonDocument.Parse(points);
-                var forecastUrl = pointsDoc.RootElement.GetProperty("properties").GetProperty("forecast").GetString();
-                if (!string.IsNullOrWhiteSpace(forecastUrl))
-                {
-                    var forecast = await client.GetStringAsync(forecastUrl, cancellationToken);
-                    using var forecastDoc = System.Text.Json.JsonDocument.Parse(forecast);
-                    var period = forecastDoc.RootElement.GetProperty("properties").GetProperty("periods")[0];
-                    headline = period.GetProperty("name").GetString() ?? headline;
-                    detail = period.GetProperty("detailedForecast").GetString() ?? detail;
-                }
+                continue;
+            }
+
+            var key = Uri.UnescapeDataString(segment[..sep]);
+            if (key.Equals("units", StringComparison.OrdinalIgnoreCase))
+            {
+                return Uri.UnescapeDataString(segment[(sep + 1)..]).Equals("si", StringComparison.OrdinalIgnoreCase);
             }
         }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "NOAA fallback forecast failed");
-        }
 
-        var text = EscapeDraw(headline) + ": " + EscapeDraw(detail);
-        var hasMusic = !string.IsNullOrWhiteSpace(musicPath) && File.Exists(musicPath);
-        var args = new List<string>
-        {
-            "-hide_banner", "-loglevel", "warning"
-        };
-        args.AddRange(_encoding.HardwareDeviceArgs);
-        args.AddRange(["-f", "lavfi", "-i", $"color=c=0x0b1d36:s={width}x{height}:r=30"]);
-        if (hasMusic)
-        {
-            args.AddRange(["-stream_loop", "-1", "-i", musicPath!]);
-        }
-        else
-        {
-            args.AddRange(["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]);
-        }
-
-        var vf = _encoding.AdaptVideoFilterForEncoder(
-            $"drawtext=text='WeatherStar':fontcolor=white:fontsize=36:x=40:y=40,drawtext=text='{text}':fontcolor=white:fontsize=22:x=40:y=120:text_w=w-80",
-            _encoding.Encoder);
-        args.AddRange([
-            "-vf", vf,
-            "-map", "0:v", "-map", "1:a"
-        ]);
-        _encoding.AppendVideoEncoder(args, stillImage: true);
-        args.AddRange([
-            "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
-            "-t", "120",
-            "-f", "mpegts", "pipe:1"
-        ]);
-
-        await CliWrap.Cli.Wrap(ffmpegPath)
-            .WithArguments(args)
-            .WithStandardOutputPipe(CliWrap.PipeTarget.ToStream(output, autoFlush: true))
-            .WithValidation(CliWrap.CommandResultValidation.None)
-            .ExecuteAsync(cancellationToken);
+        return false;
     }
-
-    private static string EscapeDraw(string text)
-        => text.Replace("\\", "\\\\").Replace("'", "\\'").Replace(":", "\\:").Replace("%", "\\%");
 
     private static (int Width, int Height) GetResolution(Domain.Channel channel)
     {

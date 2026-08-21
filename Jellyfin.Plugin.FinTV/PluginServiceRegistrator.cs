@@ -78,9 +78,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<FinTvChannelAutoTaggingTask>();
         serviceCollection.AddSingleton<IScheduledTask>(sp => sp.GetRequiredService<FinTvChannelAutoTaggingTask>());
         serviceCollection.AddScoped<EbsService>();
-        serviceCollection.AddSingleton<PlaywrightDockerBrowserService>();
         serviceCollection.AddSingleton<WeatherStarDockerService>();
-        serviceCollection.AddSingleton<PlaywrightRuntimeService>();
         serviceCollection.AddScoped<WeatherStarChannelService>();
         serviceCollection.AddSingleton<Streaming.JellyfinFfmpegEncodingService>();
         serviceCollection.AddSingleton<StreamService>();

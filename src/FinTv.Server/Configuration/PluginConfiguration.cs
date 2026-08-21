@@ -48,6 +48,11 @@ public class PluginConfiguration
 
     public string? WeatherDefaultLocationQuery { get; set; }
 
+    /// <summary>
+    /// <c>auto</c>, <c>us</c> (NOAA), or <c>world</c> (Open-Meteo).
+    /// </summary>
+    public string WeatherSource { get; set; } = "auto";
+
     public bool AutoStartPlaywrightDockerSidecar { get; set; }
 
     public bool AutoStartWeatherStarDocker { get; set; } = true;

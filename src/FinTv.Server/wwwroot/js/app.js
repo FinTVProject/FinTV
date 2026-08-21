@@ -3702,16 +3702,17 @@
         const el = $('weather-renderer-status');
         if (!el) return;
         const variant = status?.weatherStarVariant === 'ws3kp' ? 'ws3kp' : 'ws4kp';
-        const running = variant === 'ws3kp' ? !!status?.ws3kpRunning : !!status?.ws4kpRunning;
         const label = variant === 'ws3kp' ? 'WeatherStar 3000' : 'WeatherStar 4000';
-        const state = running
-            ? label + ' renderer running on loopback'
-            : label + ' renderer idle (starts on first tune)';
-        const chrome = status?.chromium ? 'Chromium available for native frame capture' : 'Chromium missing — NOAA overlay fallback will be used';
-        el.innerHTML = `<div>${escapeHtml(state)}</div><div class="meta">${escapeHtml(chrome)} · not exposed as a public website</div>`;
+        const source = status?.weatherSource === 'us' ? 'United States (NOAA)'
+            : status?.weatherSource === 'world' ? 'World (Open-Meteo)'
+            : 'Auto (NOAA in the US, Open-Meteo worldwide)';
+        el.innerHTML = `<div>${escapeHtml(label)} native live stream</div><div class="meta">${escapeHtml(source)} · no Chromium</div>`;
         const variantSelect = $('weather-star-variant');
         if (variantSelect) {
             variantSelect.value = variant;
+        }
+        if ($('weather-source')) {
+            $('weather-source').value = status?.weatherSource || 'auto';
         }
         const select = $('weather-music-library');
         if (select && Array.isArray(status?.musicLibraries)) {
@@ -3721,7 +3722,7 @@
             if (current) select.value = current;
         }
         if ($('weather-default-zip')) {
-            $('weather-default-zip').value = extractWeatherZip(status?.weatherDefaultLocationQuery) || '';
+            $('weather-default-zip').value = status?.weatherDefaultLocationQuery || '';
         }
         renderWeatherZipList(status?.weatherChannels || []);
         applyWeatherQueryToForm(status?.weatherStarPermalinkQuery || '');
@@ -3750,12 +3751,12 @@
         return match ? match[1] : '';
     }
 
-    function readWeatherZip(value, label) {
-        const zip = extractWeatherZip(value) || String(value || '').trim();
-        if (!/^\d{5}$/.test(zip)) {
-            throw new Error((label || 'ZIP code') + ' must be a 5-digit US ZIP.');
+    function readWeatherLocation(value, label) {
+        const trimmed = String(value || '').trim();
+        if (trimmed.length < 2) {
+            throw new Error((label || 'Location') + ' is required (US ZIP, city, or lat,lon).');
         }
-        return zip;
+        return trimmed;
     }
 
     function weatherQueryFlag(params, key, fallback) {
@@ -3823,16 +3824,16 @@
             return;
         }
         if (!rows.length) {
-            el.innerHTML = '<p class="hint">No weather channels yet. Apply a WeatherStar preset or create a Weather channel, then set its ZIP here.</p>';
+            el.innerHTML = '<p class="hint">No weather channels yet. Apply a WeatherStar preset or create a Weather channel, then set its location here.</p>';
             return;
         }
         el.innerHTML = rows.map((ch) => {
-            const zip = extractWeatherZip(ch.zip || ch.weatherLocationQuery);
+            const location = ch.location || ch.weatherLocationQuery || ch.zip || '';
             return '<div class="weather-zip-row">'
                 + '<div class="wx-channel-label">' + escapeHtml((ch.number || '') + ' · ' + (ch.name || 'Weather')) + '</div>'
-                + '<label class="field"><span>ZIP code</span>'
+                + '<label class="field"><span>Location</span>'
                 + '<input class="emby-input weather-channel-zip" data-channel-id="' + escapeHtml(ch.id)
-                + '" inputmode="numeric" maxlength="10" placeholder="50317" value="' + escapeHtml(zip) + '">'
+                + '" placeholder="50317 or London, UK" value="' + escapeHtml(location) + '">'
                 + '</label></div>';
         }).join('');
     }
@@ -3846,25 +3847,15 @@
         }
     }
 
-    async function startWeatherRenderer(variant) {
-        try {
-            const data = await api('/weather/renderer/' + variant + '/start', { method: 'POST', body: '{}' });
-            renderWeatherStatus(data);
-            toast((variant === 'ws3kp' ? 'WeatherStar 3000' : 'WeatherStar 4000') + ' is now the active renderer.', 'success');
-        } catch (err) {
-            reportApiError(err, 'Could not start weather renderer.');
-        }
-    }
-
     async function saveWeatherSettings() {
         const musicSelect = $('weather-music-library');
         const selected = musicSelect?.selectedOptions?.[0];
         try {
             const defaultRaw = $('weather-default-zip')?.value.trim();
-            const defaultZip = defaultRaw ? readWeatherZip(defaultRaw, 'Default ZIP code') : null;
+            const defaultLocation = defaultRaw ? readWeatherLocation(defaultRaw, 'Default location') : null;
             const channelZips = Array.from(qa('.weather-channel-zip')).map((input) => ({
                 id: input.dataset.channelId,
-                zip: readWeatherZip(input.value, 'Channel ZIP code')
+                location: readWeatherLocation(input.value, 'Channel location')
             }));
             await api('/weather/settings', {
                 method: 'PUT',
@@ -3872,9 +3863,10 @@
                     weatherStarPermalinkQuery: serializeWeatherQueryFromForm(),
                     weatherStarAutoWideForSixteenNine: !!$('weather-auto-wide-169')?.checked,
                     weatherStarVariant: $('weather-star-variant')?.value || 'ws4kp',
+                    weatherSource: $('weather-source')?.value || 'auto',
                     weatherMusicLibraryId: musicSelect?.value || '',
                     weatherMusicLibraryName: selected && selected.value ? selected.textContent : '',
-                    defaultZip,
+                    defaultLocation,
                     channels: channelZips
                 })
             });
@@ -5423,8 +5415,6 @@
         click('btn-remove-ebs-usa', () => removeEbsSlate('usa'));
         click('btn-remove-ebs-international', () => removeEbsSlate('international'));
         click('btn-save-weather', saveWeatherSettings);
-        click('btn-weather-renderer-start', () => startWeatherRenderer($('weather-star-variant')?.value || 'ws4kp').catch((e) => toast(e.message, 'error')));
-        change('weather-star-variant', () => startWeatherRenderer($('weather-star-variant')?.value || 'ws4kp').catch((e) => toast(e.message, 'error')));
         click('btn-save-news', () => saveNewsSettings().catch((e) => toast(e.message, 'error')));
         click('btn-save-news-feeds', () => saveNewsFeeds().catch((e) => toast(e.message, 'error')));
         click('btn-add-news-feed', addNewsFeedRow);

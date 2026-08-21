@@ -829,7 +829,7 @@ public class JellyfinCatalogService
             return false;
         }
 
-        var folder = ResolveLibraryFolder(libraryConstraint.LibraryName);
+        var folder = ResolveScopedLibraryFolder(channel, libraryConstraint);
         if (folder is null)
         {
             return false;
@@ -840,6 +840,53 @@ public class JellyfinCatalogService
         query.Genres = Array.Empty<string>();
         return true;
     }
+
+    private CollectionFolder? ResolveScopedLibraryFolder(Channel channel, ChannelCatalogLibraryConstraints constraint)
+    {
+        var names = constraint.AllLibraryNames();
+        var root = _libraryManager.GetUserRootFolder();
+        CollectionFolder? homeVideoFallback = null;
+        foreach (var child in root.Children)
+        {
+            if (child is not CollectionFolder folder)
+            {
+                continue;
+            }
+
+            if (names.Any(name => folder.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                || MatchesHomeMovieLibrary(folder.Name, folder.CollectionType?.ToString()))
+            {
+                return folder;
+            }
+
+            if (homeVideoFallback is null && MatchesHomeMovieLibrary(folder.Name, folder.CollectionType?.ToString()))
+            {
+                homeVideoFallback = folder;
+            }
+        }
+
+        return homeVideoFallback ?? ResolveLibraryFolder(constraint.LibraryName);
+    }
+
+    private static bool MatchesHomeMovieLibrary(string? name, string? collectionType)
+    {
+        if (!string.IsNullOrWhiteSpace(name)
+            && (name.Contains("past tense", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("home movie", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("home video", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        var type = (collectionType ?? string.Empty).Trim().ToLowerInvariant().Replace(" ", string.Empty);
+        return type.Contains("homevideo", StringComparison.Ordinal);
+    }
+
+    private static bool IsPastTenseNewsChannel(Channel channel)
+        => string.Equals(
+            ChannelAiRules.ExtractLibraryTag(channel.FilterJson),
+            "fintv-past-tense-news",
+            StringComparison.OrdinalIgnoreCase);
 
     private CollectionFolder? ResolveLibraryFolder(string libraryName)
     {
@@ -863,6 +910,11 @@ public class JellyfinCatalogService
 
     private static BaseItemKind[] GetQueryItemTypes(Channel channel)
     {
+        if (IsPastTenseNewsChannel(channel))
+        {
+            return [BaseItemKind.Movie, BaseItemKind.Video, BaseItemKind.Episode];
+        }
+
         var catalogMode = ResolveCatalogMode(channel);
         if (channel.ContentType == ChannelContentType.MusicVideo)
         {
@@ -885,6 +937,11 @@ public class JellyfinCatalogService
 
     private static BaseItemKind[] GetManifestItemTypes(Channel channel, ChannelCatalogMode catalogMode)
     {
+        if (IsPastTenseNewsChannel(channel))
+        {
+            return [BaseItemKind.Movie, BaseItemKind.Video];
+        }
+
         if (channel.ContentType == ChannelContentType.MusicVideo)
         {
             return new[] { BaseItemKind.MusicVideo };

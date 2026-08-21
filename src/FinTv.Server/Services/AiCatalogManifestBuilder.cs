@@ -18,6 +18,9 @@ public class AiCatalogManifestBuilder
     public AiCatalogManifest Build(Channel channel)
     {
         var catalogMode = JellyfinCatalogService.ResolveCatalogMode(channel);
+        var mapMode = PastTenseNewsCatalog.IsPastTenseNewsChannel(channel)
+            ? ChannelCatalogMode.Mixed
+            : catalogMode;
         var maxItems = FinTvRuntime.Current?.Configuration.Ai.MaxCatalogItemsInPrompt ?? 250;
         var yearConstraints = ChannelAiRules.GetYearConstraints(channel);
         var genreConstraints = ChannelAiRules.GetGenreConstraints(channel);
@@ -26,7 +29,7 @@ public class AiCatalogManifestBuilder
         var items = browseStats.Items;
 
         var entries = items
-            .Select(item => MapEntry(item, catalogMode, yearConstraints, genreConstraints))
+            .Select(item => MapEntry(item, mapMode, yearConstraints, genreConstraints))
             .Where(e => e is not null)
             .Cast<AiCatalogEntry>()
             .OrderBy(e => e.Year ?? int.MaxValue)
@@ -109,6 +112,27 @@ public class AiCatalogManifestBuilder
                 Genres = movie.Genres?.ToList() ?? new List<string>(),
                 Tags = movie.Tags?.ToList() ?? new List<string>(),
                 Plot = TruncatePlot(movie.Overview)
+            };
+        }
+
+        if (item.Kind == BaseItemKind.Video)
+        {
+            if (catalogMode == ChannelCatalogMode.MusicVideoOnly)
+            {
+                return null;
+            }
+
+            return new AiCatalogEntry
+            {
+                Id = item.Id,
+                Title = item.Name,
+                Type = "Clip",
+                Year = JellyfinCatalogService.GetReleaseYear(item),
+                PremiereDate = item.PremiereDate,
+                RuntimeMinutes = _catalog.GetRuntimeMinutes(item),
+                Genres = item.Genres?.ToList() ?? new List<string>(),
+                Tags = item.Tags?.ToList() ?? new List<string>(),
+                Plot = TruncatePlot(item.Overview)
             };
         }
 

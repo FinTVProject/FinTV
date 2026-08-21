@@ -25,8 +25,8 @@ public static class ChannelAiRules
             ChannelCatalogMode.Mixed),
         ["fintv-news"] = new("News programming only (News genre preferred).", ChannelCatalogMode.TvOnly),
         ["fintv-past-tense-news"] = new(
-            "Only content from the Jellyfin library named Past Tense News. Schedule clips in chronological order of the events they cover and treat each story as breaking live news.",
-            ChannelCatalogMode.TvOnly),
+            "Home movies and home videos (Jellyfin Home Movies / Home Videos / Past Tense News libraries). Schedule clips in chronological order of the events they cover and treat each story as breaking live news.",
+            ChannelCatalogMode.Mixed),
         ["fintv-crime"] = new(
             "Crime and cop themed TV shows and movies. Match Crime/Cop/Police/Detective genres or crime-related plot/overview text. Exclude animated comedies, game shows, and spy-comedy series that only mention CIA/FBI without crime themes.",
             ChannelCatalogMode.Mixed),
@@ -216,7 +216,8 @@ public static class ChannelAiRules
     {
         ["fintv-past-tense-news"] = new ChannelCatalogLibraryConstraints
         {
-            LibraryName = "Past Tense News"
+            LibraryName = "Home Movies",
+            AlternateLibraryNames = ["Past Tense News", "Home Movie", "Home Videos", "Home Video"]
         },
         ["fintv-youtube"] = new ChannelCatalogLibraryConstraints
         {
@@ -665,4 +666,13 @@ public class ChannelCatalogGenreConstraints
 public class ChannelCatalogLibraryConstraints
 {
     public string LibraryName { get; set; } = string.Empty;
+
+    public string[] AlternateLibraryNames { get; set; } = [];
+
+    public IReadOnlyList<string> AllLibraryNames()
+        => new[] { LibraryName }
+            .Concat(AlternateLibraryNames)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 }

@@ -1,9 +1,7 @@
-using System.Threading.Channels;
 using Jellyfin.Plugin.FinTV.Domain;
 using Jellyfin.Plugin.FinTV.Streaming;
 using MediaBrowser.Controller.MediaEncoding;
 using Microsoft.Extensions.Logging;
-using Microsoft.Playwright;
 
 namespace Jellyfin.Plugin.FinTV.Services;
 
@@ -31,133 +29,28 @@ public class WeatherStarChannelService
         "wide"
     };
 
-    private const double CaptureFps = 12;
-    private static readonly TimeSpan PageRefreshInterval = TimeSpan.FromMinutes(30);
-
     private readonly ILogger<WeatherStarChannelService> _logger;
     private readonly FfmpegCommandBuilder _ffmpegBuilder;
     private readonly EbsService _ebs;
     private readonly IMediaEncoder _mediaEncoder;
-    private readonly PlaywrightRuntimeService _playwrightRuntime;
-    private readonly WeatherStarDockerService _weatherDocker;
 
     public WeatherStarChannelService(
         ILogger<WeatherStarChannelService> logger,
         FfmpegCommandBuilder ffmpegBuilder,
         EbsService ebs,
-        IMediaEncoder mediaEncoder,
-        PlaywrightRuntimeService playwrightRuntime,
-        WeatherStarDockerService weatherDocker)
+        IMediaEncoder mediaEncoder)
     {
         _logger = logger;
         _ffmpegBuilder = ffmpegBuilder;
         _ebs = ebs;
         _mediaEncoder = mediaEncoder;
-        _playwrightRuntime = playwrightRuntime;
-        _weatherDocker = weatherDocker;
     }
 
     public async Task StreamAsync(Domain.Channel channel, Stream output, CancellationToken cancellationToken)
     {
-        var baseUrl = Plugin.Instance?.Configuration.WeatherStarBaseUrl;
-        var localVariant = _weatherDocker.ResolveLocalVariant(baseUrl);
-        if (localVariant.HasValue)
-        {
-            await _weatherDocker.EnsureRunningAsync(localVariant.Value, cancellationToken);
-        }
-
-        var locationQuery = string.IsNullOrWhiteSpace(channel.WeatherLocationQuery)
-            ? DefaultWeatherLocationQuery
-            : channel.WeatherLocationQuery.Trim();
-        var permalinkQuery = Plugin.Instance?.Configuration.WeatherStarPermalinkQuery;
-        var autoWideForSixteenNine = Plugin.Instance?.Configuration.WeatherStarAutoWideForSixteenNine ?? true;
-        var weatherPageUrl = _playwrightRuntime.AdjustWeatherPageUrlForRuntime(
-            BuildWeatherPageUrl(
-                locationQuery,
-                baseUrl,
-                permalinkQuery,
-                autoWideForSixteenNine,
-                channel.AspectRatio));
-        var (width, height) = GetResolution(channel);
-        var ffmpegPath = _mediaEncoder.EncoderPath;
-        var backgroundMusicPath = _ebs.ResolveBackgroundMusicPath();
-        var hasCoordinates = WeatherLocationParser.TryParseLatLon(locationQuery, out var latitude, out var longitude);
-
-        IBrowser? browser = null;
-        var sharedDockerCdp = false;
-        try
-        {
-            using var playwright = await _playwrightRuntime.CreateAsync(cancellationToken);
-            (browser, sharedDockerCdp) = await _playwrightRuntime.ConnectBrowserAsync(playwright, cancellationToken);
-            var contextOptions = new BrowserNewContextOptions
-            {
-                ViewportSize = new ViewportSize { Width = width, Height = height }
-            };
-            if (hasCoordinates)
-            {
-                contextOptions.Geolocation = new Geolocation
-                {
-                    Latitude = (float)latitude,
-                    Longitude = (float)longitude
-                };
-                contextOptions.Permissions = new[] { "geolocation" };
-            }
-
-            await using var context = await browser.NewContextAsync(contextOptions);
-            var page = await context.NewPageAsync();
-            await NavigateToWeatherAsync(page, weatherPageUrl, cancellationToken);
-
-            using var frameStream = new ScreenshotFrameStream();
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var ffmpegStderr = new System.Text.StringBuilder();
-
-            var ffmpegTask = CliWrap.Cli.Wrap(ffmpegPath)
-                .WithArguments(_ffmpegBuilder.BuildWeatherCommand(width, height, CaptureFps, backgroundMusicPath))
-                .WithStandardInputPipe(CliWrap.PipeSource.FromStream(frameStream))
-                .WithStandardOutputPipe(CliWrap.PipeTarget.ToStream(output))
-                .WithStandardErrorPipe(CliWrap.PipeTarget.ToStringBuilder(ffmpegStderr))
-                .WithValidation(CliWrap.CommandResultValidation.None)
-                .ExecuteAsync(linkedCts.Token);
-
-            var captureTask = CaptureWeatherLoopAsync(page, weatherPageUrl, frameStream, linkedCts.Token);
-
-            var completed = await Task.WhenAny(ffmpegTask, captureTask);
-            if (completed == captureTask)
-            {
-                await captureTask;
-            }
-
-            linkedCts.Cancel();
-            frameStream.Complete();
-
-            try
-            {
-                var ffmpegResult = await ffmpegTask;
-                if (ffmpegResult.ExitCode != 0 && ffmpegStderr.Length > 0)
-                {
-                    _logger.LogWarning(
-                        "Weather ffmpeg exited {ExitCode}: {Stderr}",
-                        ffmpegResult.ExitCode,
-                        ffmpegStderr.ToString().Trim());
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected when the viewer disconnects.
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "WeatherStar capture failed, using EBS slate");
-            await WriteEbsFallbackAsync(channel, ffmpegPath, output, cancellationToken);
-        }
-        finally
-        {
-            if (browser is not null)
-            {
-                await _playwrightRuntime.ReleaseBrowserAsync(browser, sharedDockerCdp);
-            }
-        }
+        _logger.LogInformation(
+            "WeatherStar capture in the Jellyfin plugin is retired. Tune weather through FinTV Server IPTV for the native compositor.");
+        await WriteEbsFallbackAsync(channel, _mediaEncoder.EncoderPath, output, cancellationToken);
     }
 
     internal static string BuildWeatherPageUrl(
@@ -300,89 +193,6 @@ public class WeatherStarChannelService
                     : $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"));
     }
 
-    private async Task NavigateToWeatherAsync(IPage page, string weatherPageUrl, CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("Opening WeatherStar page {Url}", weatherPageUrl);
-        await page.GotoAsync(weatherPageUrl, new PageGotoOptions
-        {
-            WaitUntil = WaitUntilState.DOMContentLoaded,
-            Timeout = 45000
-        });
-        await TryStartWeatherPlaybackAsync(page);
-        await page.WaitForTimeoutAsync(2500);
-        cancellationToken.ThrowIfCancellationRequested();
-    }
-
-    private static async Task TryStartWeatherPlaybackAsync(IPage page)
-    {
-        var selectors = new[]
-        {
-            "button:has-text('GO')",
-            "button:has-text('Press Here')",
-            "button:has-text('Play')",
-            "text=Press Here",
-            "#btn-kiosk",
-            ".play-button"
-        };
-
-        foreach (var selector in selectors)
-        {
-            try
-            {
-                var locator = page.Locator(selector).First;
-                if (await locator.CountAsync() == 0)
-                {
-                    continue;
-                }
-
-                if (await locator.IsVisibleAsync())
-                {
-                    await locator.ClickAsync(new LocatorClickOptions { Timeout = 2000 });
-                    return;
-                }
-            }
-            catch
-            {
-                // Keep looking; kiosk mode may already be running.
-            }
-        }
-    }
-
-    private async Task CaptureWeatherLoopAsync(
-        IPage page,
-        string weatherPageUrl,
-        ScreenshotFrameStream frameStream,
-        CancellationToken cancellationToken)
-    {
-        var frameDelay = TimeSpan.FromSeconds(1.0 / CaptureFps);
-        var nextRefresh = DateTime.UtcNow.Add(PageRefreshInterval);
-
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            if (DateTime.UtcNow >= nextRefresh)
-            {
-                await NavigateToWeatherAsync(page, weatherPageUrl, cancellationToken);
-                nextRefresh = DateTime.UtcNow.Add(PageRefreshInterval);
-            }
-
-            var jpeg = await page.ScreenshotAsync(new PageScreenshotOptions
-            {
-                Type = ScreenshotType.Jpeg,
-                Quality = 85
-            });
-
-            await frameStream.WriteFrameAsync(jpeg, cancellationToken);
-            await Task.Delay(frameDelay, cancellationToken);
-        }
-    }
-
-    private static (int Width, int Height) GetResolution(Domain.Channel channel)
-    {
-        return channel.AspectRatio == AspectRatioMode.FourThree
-            ? (640, 480)
-            : (854, 480);
-    }
-
     private async Task WriteEbsFallbackAsync(
         Domain.Channel channel,
         string ffmpegPath,
@@ -396,93 +206,5 @@ public class WeatherStarChannelService
             .WithStandardOutputPipe(CliWrap.PipeTarget.ToStream(output))
             .WithValidation(CliWrap.CommandResultValidation.None)
             .ExecuteAsync(cancellationToken);
-    }
-
-    private sealed class ScreenshotFrameStream : Stream
-    {
-        private readonly System.Threading.Channels.Channel<byte[]> _frames = System.Threading.Channels.Channel.CreateBounded<byte[]>(new BoundedChannelOptions(4)
-        {
-            FullMode = BoundedChannelFullMode.Wait,
-            SingleReader = true,
-            SingleWriter = true
-        });
-
-        private byte[]? _currentFrame;
-        private int _currentOffset;
-
-        public async Task WriteFrameAsync(byte[] frame, CancellationToken cancellationToken)
-        {
-            await _frames.Writer.WriteAsync(frame, cancellationToken);
-        }
-
-        public void Complete()
-        {
-            _frames.Writer.TryComplete();
-        }
-
-        public override bool CanRead => true;
-
-        public override bool CanSeek => false;
-
-        public override bool CanWrite => false;
-
-        public override long Length => throw new NotSupportedException();
-
-        public override long Position
-        {
-            get => throw new NotSupportedException();
-            set => throw new NotSupportedException();
-        }
-
-        public override void Flush()
-        {
-        }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            return ReadAsync(buffer, offset, count, CancellationToken.None).GetAwaiter().GetResult();
-        }
-
-        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-        {
-            if (count == 0)
-            {
-                return 0;
-            }
-
-            var totalRead = 0;
-            while (totalRead == 0)
-            {
-                if (_currentFrame is null || _currentOffset >= _currentFrame.Length)
-                {
-                    if (!await _frames.Reader.WaitToReadAsync(cancellationToken))
-                    {
-                        return 0;
-                    }
-
-                    if (!_frames.Reader.TryRead(out var next))
-                    {
-                        continue;
-                    }
-
-                    _currentFrame = next;
-                    _currentOffset = 0;
-                }
-
-                var available = _currentFrame.Length - _currentOffset;
-                var toCopy = Math.Min(count - totalRead, available);
-                Buffer.BlockCopy(_currentFrame, _currentOffset, buffer, offset + totalRead, toCopy);
-                _currentOffset += toCopy;
-                totalRead += toCopy;
-            }
-
-            return totalRead;
-        }
-
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-
-        public override void SetLength(long value) => throw new NotSupportedException();
-
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

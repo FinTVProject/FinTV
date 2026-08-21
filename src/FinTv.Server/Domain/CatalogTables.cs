@@ -78,18 +78,25 @@ public abstract class CatalogMediaRow
     public DateTime? MissingSince { get; set; }
 }
 
-/// <summary>TV series and episodes from Jellyfin TV libraries.</summary>
+/// <summary>TV series from Jellyfin TV libraries.</summary>
 public class TvShowRow : CatalogMediaRow
+{
+}
+
+/// <summary>Episodes belonging to a TV series.</summary>
+public class EpisodeRow : CatalogMediaRow
 {
     public Guid? SeriesId { get; set; }
 
     public string? SeriesName { get; set; }
 
+    public Guid? SeasonId { get; set; }
+
+    public string? SeasonName { get; set; }
+
     public int? SeasonNumber { get; set; }
 
     public int? EpisodeNumber { get; set; }
-
-    public bool IsSeries { get; set; }
 }
 
 /// <summary>Feature films from Jellyfin movie libraries.</summary>

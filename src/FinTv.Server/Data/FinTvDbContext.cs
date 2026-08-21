@@ -46,6 +46,8 @@ public class FinTvDbContext : DbContext
 
     public DbSet<TvShowRow> TvShows => Set<TvShowRow>();
 
+    public DbSet<EpisodeRow> Episodes => Set<EpisodeRow>();
+
     public DbSet<MovieRow> Movies => Set<MovieRow>();
 
     public DbSet<MusicRow> Music => Set<MusicRow>();
@@ -164,6 +166,11 @@ public class FinTvDbContext : DbContext
         });
 
         ConfigureCatalogTable<TvShowRow>(modelBuilder, "TvShows");
+        ConfigureCatalogTable<EpisodeRow>(modelBuilder, "Episodes");
+        modelBuilder.Entity<EpisodeRow>(entity =>
+        {
+            entity.HasIndex(e => e.SeriesId);
+        });
         ConfigureCatalogTable<MovieRow>(modelBuilder, "Movies");
         ConfigureCatalogTable<MusicRow>(modelBuilder, "Music");
         ConfigureCatalogTable<MusicVideoRow>(modelBuilder, "MusicVideos");

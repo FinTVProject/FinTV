@@ -333,13 +333,24 @@ public class JellyfinCatalogService
             holiday = _holidays.GetActiveHoliday(date);
         }
 
-        if (yearConstraints is null && genreConstraints is null && holiday is null && !_holidays.IsHolidayChannel(channel))
+        if (yearConstraints is null && genreConstraints is null && holiday is null && !_holidays.IsHolidayChannel(channel)
+            && !PastTenseNewsCatalog.IsPastTenseNewsChannel(channel))
         {
             return items;
         }
 
         return items.Where(item =>
         {
+            if (PastTenseNewsCatalog.IsPastTenseNewsChannel(channel)
+                && !PastTenseNewsCatalog.IsHomeMovieItem(
+                    item.LibraryName,
+                    item.CollectionType,
+                    item.LibraryId,
+                    item.Kind,
+                    FinTvRuntime.Current?.Configuration.JellyfinLibraries.HomeVideoLibraryIds))
+            {
+                return false;
+            }
             if (yearConstraints is not null && !MatchesYearConstraints(item, yearConstraints))
             {
                 return false;
@@ -822,16 +833,61 @@ public class JellyfinCatalogService
             return false;
         }
 
-        var folder = ResolveLibraryFolder(libraryConstraint.LibraryName);
+        var folder = ResolveScopedLibraryFolder(channel, libraryConstraint);
         if (folder is null)
         {
             return false;
+        }
+
+        var selectedHomeVideo = FinTvRuntime.Current?.Configuration.JellyfinLibraries.HomeVideoLibraryIds ?? [];
+        if (PastTenseNewsCatalog.IsPastTenseNewsChannel(channel) && selectedHomeVideo.Count > 1)
+        {
+            query.Tags = Array.Empty<string>();
+            query.Genres = Array.Empty<string>();
+            return true;
         }
 
         query.ParentId = folder.Id;
         query.Tags = Array.Empty<string>();
         query.Genres = Array.Empty<string>();
         return true;
+    }
+
+    private CollectionFolder? ResolveScopedLibraryFolder(Channel channel, ChannelCatalogLibraryConstraints constraint)
+    {
+        if (PastTenseNewsCatalog.IsPastTenseNewsChannel(channel))
+        {
+            var selected = FinTvRuntime.Current?.Configuration.JellyfinLibraries.HomeVideoLibraryIds ?? [];
+            var root = _libraryManager.GetUserRootFolder();
+            CollectionFolder? homeVideoFallback = null;
+            foreach (var child in root.Children)
+            {
+                if (child is not CollectionFolder folder)
+                {
+                    continue;
+                }
+
+                if (selected.Count > 0 && selected.Contains(folder.Id))
+                {
+                    return folder;
+                }
+
+                if (constraint.AllLibraryNames().Any(name => folder.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                    || PastTenseNewsCatalog.MatchesLibraryName(folder.Name))
+                {
+                    return folder;
+                }
+
+                if (homeVideoFallback is null && PastTenseNewsCatalog.MatchesCollectionType(folder.CollectionType))
+                {
+                    homeVideoFallback = folder;
+                }
+            }
+
+            return homeVideoFallback;
+        }
+
+        return ResolveLibraryFolder(constraint.LibraryName);
     }
 
     private CollectionFolder? ResolveLibraryFolder(string libraryName)
@@ -856,6 +912,11 @@ public class JellyfinCatalogService
 
     private static BaseItemKind[] GetQueryItemTypes(Channel channel)
     {
+        if (PastTenseNewsCatalog.IsPastTenseNewsChannel(channel))
+        {
+            return [BaseItemKind.Movie, BaseItemKind.Video, BaseItemKind.Episode];
+        }
+
         var catalogMode = ResolveCatalogMode(channel);
         if (channel.ContentType == ChannelContentType.MusicVideo)
         {
@@ -878,6 +939,11 @@ public class JellyfinCatalogService
 
     private static BaseItemKind[] GetManifestItemTypes(Channel channel, ChannelCatalogMode catalogMode)
     {
+        if (PastTenseNewsCatalog.IsPastTenseNewsChannel(channel))
+        {
+            return [BaseItemKind.Movie, BaseItemKind.Video];
+        }
+
         if (channel.ContentType == ChannelContentType.MusicVideo)
         {
             return new[] { BaseItemKind.MusicVideo };

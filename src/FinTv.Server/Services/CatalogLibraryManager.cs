@@ -8,7 +8,7 @@ namespace FinTv.Services;
 
 /// <summary>
 /// Postgres-backed stand-in for Jellyfin ILibraryManager + IChapterManager.
-/// Reads TvShows/Movies/Music/MusicVideos/PastTenseNews, with MediaItems as fallback.
+/// Reads TvShows/Episodes/Movies/Music/MusicVideos/PastTenseNews, with MediaItems as fallback.
 /// </summary>
 public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
 {
@@ -26,10 +26,16 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
         var tv = _db.TvShows.AsNoTracking().FirstOrDefault(row => row.Id == id);
         if (tv is not null)
         {
-            var item = Map(tv, tv.IsSeries ? BaseItemKind.Series : BaseItemKind.Episode);
-            if (item is Episode episode && tv.SeriesId is Guid seriesId && seriesId != Guid.Empty)
+            return Map(tv, BaseItemKind.Series);
+        }
+
+        var episodeRow = _db.Episodes.AsNoTracking().FirstOrDefault(row => row.Id == id);
+        if (episodeRow is not null)
+        {
+            var item = Map(episodeRow, BaseItemKind.Episode);
+            if (item is Episode episode && episodeRow.SeriesId is Guid seriesId && seriesId != Guid.Empty)
             {
-                var series = _db.TvShows.AsNoTracking().FirstOrDefault(row => row.Id == seriesId && row.IsSeries);
+                var series = _db.TvShows.AsNoTracking().FirstOrDefault(row => row.Id == seriesId);
                 if (series is not null)
                 {
                     episode.Series = Map(series, BaseItemKind.Series) as Series;
@@ -189,6 +195,7 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
         }
 
         var json = _db.TvShows.AsNoTracking().Where(row => row.Id == itemId).Select(row => row.ChaptersJson).FirstOrDefault()
+            ?? _db.Episodes.AsNoTracking().Where(row => row.Id == itemId).Select(row => row.ChaptersJson).FirstOrDefault()
             ?? _db.Movies.AsNoTracking().Where(row => row.Id == itemId).Select(row => row.ChaptersJson).FirstOrDefault()
             ?? _db.Music.AsNoTracking().Where(row => row.Id == itemId).Select(row => row.ChaptersJson).FirstOrDefault()
             ?? _db.MusicVideos.AsNoTracking().Where(row => row.Id == itemId).Select(row => row.ChaptersJson).FirstOrDefault()
@@ -202,32 +209,34 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
         var wantAll = kinds is null || kinds.Count == 0;
         var parentId = query.ParentId;
 
-        if (wantAll || kinds!.Contains(BaseItemKind.Series) || kinds.Contains(BaseItemKind.Episode))
+        if (wantAll || kinds!.Contains(BaseItemKind.Series))
         {
             IQueryable<TvShowRow> tv = _db.TvShows.AsNoTracking().Where(row => !row.IsMissing);
-            if (kinds is { Count: > 0 })
-            {
-                if (kinds.Contains(BaseItemKind.Series) && !kinds.Contains(BaseItemKind.Episode))
-                {
-                    tv = tv.Where(row => row.IsSeries);
-                }
-                else if (kinds.Contains(BaseItemKind.Episode) && !kinds.Contains(BaseItemKind.Series))
-                {
-                    tv = tv.Where(row => !row.IsSeries);
-                }
-            }
-
             if (parentId != Guid.Empty)
             {
-                tv = tv.Where(row => row.SeriesId == parentId || row.Id == parentId || row.LibraryId == parentId);
+                tv = tv.Where(row => row.Id == parentId || row.LibraryId == parentId);
             }
 
             tv = ApplyNameFilter(tv, query);
-            items.AddRange(tv.AsEnumerable().Select(row =>
-                Map(row, row.IsSeries ? BaseItemKind.Series : BaseItemKind.Episode)));
+            items.AddRange(tv.AsEnumerable().Select(row => Map(row, BaseItemKind.Series)));
         }
 
         if (wantAll || kinds!.Contains(BaseItemKind.Episode))
+        {
+            IQueryable<EpisodeRow> episodes = _db.Episodes.AsNoTracking().Where(row => !row.IsMissing);
+            if (parentId != Guid.Empty)
+            {
+                episodes = episodes.Where(row => row.SeriesId == parentId || row.Id == parentId || row.LibraryId == parentId);
+            }
+
+            episodes = ApplyNameFilter(episodes, query);
+            items.AddRange(episodes.AsEnumerable().Select(row => Map(row, BaseItemKind.Episode)));
+        }
+
+        if (wantAll
+            || kinds!.Contains(BaseItemKind.Episode)
+            || kinds.Contains(BaseItemKind.Movie)
+            || kinds.Contains(BaseItemKind.Video))
         {
             IQueryable<PastTenseNewsRow> news = _db.PastTenseNews.AsNoTracking().Where(row => !row.IsMissing);
             if (parentId != Guid.Empty)
@@ -345,14 +354,7 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
     }
 
     private BaseItem MapNews(PastTenseNewsRow row)
-    {
-        var item = Map(row, BaseItemKind.Episode);
-        item.SeriesId = row.SeriesId ?? Guid.Empty;
-        item.SeriesName = row.SeriesName;
-        item.IndexNumber = row.EpisodeNumber;
-        item.ParentIndexNumber = row.SeasonNumber;
-        return item;
-    }
+        => Map(row, BaseItemKind.Movie);
 
     private BaseItem Map(CatalogMediaRow row, BaseItemKind kind)
     {
@@ -385,12 +387,13 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
         item.Kind = kind;
         item.ParentId = row.LibraryId ?? Guid.Empty;
 
-        if (row is TvShowRow tv)
+        if (row is EpisodeRow episode)
         {
-            item.SeriesId = tv.SeriesId ?? Guid.Empty;
-            item.SeriesName = tv.SeriesName;
-            item.IndexNumber = tv.EpisodeNumber;
-            item.ParentIndexNumber = tv.SeasonNumber;
+            item.SeriesId = episode.SeriesId ?? Guid.Empty;
+            item.SeriesName = episode.SeriesName;
+            item.IndexNumber = episode.EpisodeNumber;
+            item.ParentIndexNumber = episode.SeasonNumber;
+            item.ParentId = episode.SeriesId ?? episode.LibraryId ?? Guid.Empty;
         }
 
         if (row is MusicRow track)

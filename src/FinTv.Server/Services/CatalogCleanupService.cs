@@ -94,6 +94,11 @@ public sealed class CatalogCleanupService
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(row => row.IsMissing, true).SetProperty(row => row.MissingSince, now),
                 cancellationToken);
+        marked += await _db.Episodes
+            .Where(row => !row.IsMissing && !presentIds.Contains(row.Id))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(row => row.IsMissing, true).SetProperty(row => row.MissingSince, now),
+                cancellationToken);
         marked += await _db.Movies
             .Where(row => !row.IsMissing && !presentIds.Contains(row.Id))
             .ExecuteUpdateAsync(
@@ -314,6 +319,10 @@ public sealed class CatalogCleanupService
                     .ExecuteUpdateAsync(
                         setters => setters.SetProperty(row => row.IsMissing, true).SetProperty(row => row.MissingSince, since),
                         cancellationToken);
+                await _db.Episodes.Where(row => set.Contains(row.Id) && !row.IsMissing)
+                    .ExecuteUpdateAsync(
+                        setters => setters.SetProperty(row => row.IsMissing, true).SetProperty(row => row.MissingSince, since),
+                        cancellationToken);
                 await _db.Movies.Where(row => set.Contains(row.Id) && !row.IsMissing)
                     .ExecuteUpdateAsync(
                         setters => setters.SetProperty(row => row.IsMissing, true).SetProperty(row => row.MissingSince, since),
@@ -339,6 +348,10 @@ public sealed class CatalogCleanupService
                         setters => setters.SetProperty(row => row.IsMissing, false).SetProperty(row => row.MissingSince, (DateTime?)null),
                         cancellationToken);
                 await _db.TvShows.Where(row => set.Contains(row.Id) && row.IsMissing)
+                    .ExecuteUpdateAsync(
+                        setters => setters.SetProperty(row => row.IsMissing, false).SetProperty(row => row.MissingSince, (DateTime?)null),
+                        cancellationToken);
+                await _db.Episodes.Where(row => set.Contains(row.Id) && row.IsMissing)
                     .ExecuteUpdateAsync(
                         setters => setters.SetProperty(row => row.IsMissing, false).SetProperty(row => row.MissingSince, (DateTime?)null),
                         cancellationToken);
@@ -377,6 +390,11 @@ public sealed class CatalogCleanupService
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(row => row.IsMissing, true).SetProperty(row => row.MissingSince, now),
                 cancellationToken);
+        marked += await _db.Episodes
+            .Where(row => !row.IsMissing && row.SyncedAt < cutoffUtc)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(row => row.IsMissing, true).SetProperty(row => row.MissingSince, now),
+                cancellationToken);
         marked += await _db.Movies
             .Where(row => !row.IsMissing && row.SyncedAt < cutoffUtc)
             .ExecuteUpdateAsync(
@@ -407,6 +425,9 @@ public sealed class CatalogCleanupService
             .Where(row => row.IsMissing && row.MissingSince != null && row.MissingSince <= expireBefore)
             .ExecuteDeleteAsync(cancellationToken);
         removed += await _db.TvShows
+            .Where(row => row.IsMissing && row.MissingSince != null && row.MissingSince <= expireBefore)
+            .ExecuteDeleteAsync(cancellationToken);
+        removed += await _db.Episodes
             .Where(row => row.IsMissing && row.MissingSince != null && row.MissingSince <= expireBefore)
             .ExecuteDeleteAsync(cancellationToken);
         removed += await _db.Movies
@@ -458,6 +479,7 @@ public sealed class CatalogCleanupService
     {
         DateTime? newest = await _db.MediaItems.Select(row => (DateTime?)row.SyncedAt).MaxAsync(cancellationToken);
         newest = Later(newest, await _db.TvShows.Select(row => (DateTime?)row.SyncedAt).MaxAsync(cancellationToken));
+        newest = Later(newest, await _db.Episodes.Select(row => (DateTime?)row.SyncedAt).MaxAsync(cancellationToken));
         newest = Later(newest, await _db.Movies.Select(row => (DateTime?)row.SyncedAt).MaxAsync(cancellationToken));
         newest = Later(newest, await _db.Music.Select(row => (DateTime?)row.SyncedAt).MaxAsync(cancellationToken));
         newest = Later(newest, await _db.MusicVideos.Select(row => (DateTime?)row.SyncedAt).MaxAsync(cancellationToken));

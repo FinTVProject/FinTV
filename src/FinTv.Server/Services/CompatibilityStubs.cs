@@ -90,13 +90,6 @@ public class WeatherStarDockerCombinedStatus
 
 public sealed class WeatherStarDockerService
 {
-    private readonly WeatherRendererHost _host;
-
-    public WeatherStarDockerService(WeatherRendererHost host)
-    {
-        _host = host;
-    }
-
     public Task<WeatherStarDockerCombinedStatus> GetCombinedStatusAsync(CancellationToken cancellationToken)
     {
         _ = cancellationToken;
@@ -106,7 +99,7 @@ public sealed class WeatherStarDockerService
             Ws3kp = Status(WeatherStarDockerVariant.Ws3kp),
             ConfiguredBaseUrl = FinTvRuntime.Current?.Configuration.WeatherStarBaseUrl,
             UsingLocalWs4kp = true,
-            UsingLocalWs3kp = _host.Ws3Running
+            UsingLocalWs3kp = true
         });
     }
 
@@ -153,28 +146,33 @@ public sealed class WeatherStarDockerService
     }
 
     public Task EnsureRunningAsync(WeatherStarDockerVariant variant, CancellationToken cancellationToken)
-        => _host.EnsureRunningAsync(variant, cancellationToken);
+    {
+        _ = variant;
+        _ = cancellationToken;
+        return Task.CompletedTask;
+    }
 
     public Task StopAsync(WeatherStarDockerVariant variant, CancellationToken cancellationToken)
-        => _host.StopAsync(variant, cancellationToken);
-
-    private WeatherStarDockerStatus Status(WeatherStarDockerVariant variant)
     {
-        var running = variant == WeatherStarDockerVariant.Ws4kp ? _host.Ws4Running : _host.Ws3Running;
+        _ = variant;
+        _ = cancellationToken;
+        return Task.CompletedTask;
+    }
+
+    private static WeatherStarDockerStatus Status(WeatherStarDockerVariant variant)
+    {
         var port = variant == WeatherStarDockerVariant.Ws4kp
             ? (FinTvRuntime.Current?.Configuration.Ws4kp.HostPort ?? 8080)
             : (FinTvRuntime.Current?.Configuration.Ws3kp.HostPort ?? 8083);
         return new WeatherStarDockerStatus
         {
             DockerAvailable = false,
-            Running = running,
-            HttpReachable = running,
-            HttpListeningInsideSidecar = running,
-            StatusMessage = running
-                ? "In-image WeatherStar renderer is running on loopback."
-                : "WeatherStar renderer is stopped.",
+            Running = true,
+            HttpReachable = true,
+            HttpListeningInsideSidecar = true,
+            StatusMessage = "Native WeatherStar compositor (no Chromium).",
             ContainerName = variant == WeatherStarDockerVariant.Ws4kp ? "ws4kp" : "ws3kp",
-            Image = "in-image",
+            Image = "native",
             HostPort = port,
             BaseUrl = $"http://127.0.0.1:{port}"
         };

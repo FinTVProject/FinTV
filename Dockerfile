@@ -6,6 +6,11 @@ COPY global.json ./
 COPY src/FinTv.Server/ src/FinTv.Server/
 COPY scripts/ scripts/
 COPY logo.png ./
+COPY vendor/ws4kp/server/fonts vendor/ws4kp/server/fonts
+COPY vendor/ws4kp/server/images/backgrounds vendor/ws4kp/server/images/backgrounds
+COPY vendor/ws4kp/server/images/icons/current-conditions vendor/ws4kp/server/images/icons/current-conditions
+COPY vendor/ws3kp/server/fonts vendor/ws3kp/server/fonts
+COPY vendor/ws3kp/server/images/backgrounds vendor/ws3kp/server/images/backgrounds
 RUN python3 scripts/fetch-binarygeek119-logos.py src/FinTv.Server/wwwroot/logos/binarygeek119 \
     || echo "Logo fetch skipped (offline or rate-limited)"
 RUN dotnet publish src/FinTv.Server/FinTv.Server.csproj -c Release -o /app/publish /p:SkipLogoFetch=true
@@ -15,10 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
         ca-certificates \
         python3 \
-        nodejs \
-        npm \
         wget \
-        chromium \
         fonts-liberation \
         fonts-dejavu-core \
         intel-media-va-driver \
@@ -26,26 +28,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         mesa-va-drivers \
         libva2 \
         vainfo \
+        libfontconfig1 \
     && rm -rf /var/lib/apt/lists/* \
     && wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
-    && chmod +x /usr/local/bin/yt-dlp \
-    && if [ -x /usr/lib/chromium/chromium ]; then ln -sfn /usr/lib/chromium/chromium /usr/local/bin/fintv-chromium; \
-       elif [ -x /usr/bin/chromium ]; then ln -sfn /usr/bin/chromium /usr/local/bin/fintv-chromium; \
-       else ln -sfn "$(command -v chromium)" /usr/local/bin/fintv-chromium; fi
+    && chmod +x /usr/local/bin/yt-dlp
 
 WORKDIR /app
 COPY --from=build /app/publish .
-COPY vendor/ /app/vendor/
-WORKDIR /app/vendor/ws4kp
-RUN npm install --omit=dev
-WORKDIR /app/vendor/ws3kp
-RUN npm install --omit=dev
-WORKDIR /app
 
 ENV FINTV_CONFIG=/config \
     FFMPEG_PATH=/usr/bin/ffmpeg \
     FINTV_YTDLP_PATH=/usr/local/bin/yt-dlp \
-    CHROMIUM_PATH=/usr/local/bin/fintv-chromium \
     FFMPEG_HWACCEL=vaapi \
     FFMPEG_VAAPI_DEVICE=/dev/dri/renderD128 \
     PORT=8097

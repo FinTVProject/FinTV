@@ -46,7 +46,6 @@
     let aiPlayoutTemplates = [];
     let aiPreview = null;
     let weatherDockerStatus = null;
-    let playwrightDockerStatus = null;
     let finTvLists = [];
     let listNameCache = {};
     let specialPresentations = [];
@@ -3328,94 +3327,6 @@
         });
     }
 
-    function renderPlaywrightDockerStatus(status) {
-        playwrightDockerStatus = status;
-        const el = $('playwright-docker-status');
-        if (!el || !status) {
-            return;
-        }
-
-        let stateLine;
-        if (!status.dockerAvailable) {
-            stateLine = 'Docker not available — install Docker and ensure Jellyfin can run docker';
-        } else if (!status.running) {
-            stateLine = 'Stopped';
-        } else if (status.cdpReachable) {
-            stateLine = `Running · CDP reachable at ${status.cdpEndpoint}`;
-        } else if (status.statusMessage) {
-            stateLine = status.statusMessage;
-        } else {
-            stateLine = 'Running but CDP not reachable from Jellyfin — click Stop, then Start';
-        }
-
-        const networkLine = status.jellyfinInDocker
-            ? (status.sharesJellyfinNetwork
-                ? `Jellyfin in Docker · sharing network namespace${status.jellyfinContainerRef ? ' · ' + status.jellyfinContainerRef : ''}${status.sidecarNetworkParent ? ' · parent ' + status.sidecarNetworkParent : ''}`
-                : 'Jellyfin in Docker · host-published CDP port')
-            : 'Jellyfin on host';
-
-        const detailLine = status.running && !status.cdpReachable && status.chromeListeningInsideSidecar
-            ? '<div class="meta">Chrome responds inside the sidecar but not from Jellyfin — stale network attachment is likely.</div>'
-            : '';
-
-        el.innerHTML = `<div>${escapeHtml(stateLine)}</div><div class="meta">${escapeHtml(status.containerName)} · ${escapeHtml(status.image)} · port ${status.cdpPort} · ${escapeHtml(networkLine)}</div>${detailLine}`;
-
-        const dockerOk = !!status.dockerAvailable;
-        ['btn-playwright-start', 'btn-playwright-stop'].forEach((id) => {
-            const btn = $(id);
-            if (btn) {
-                btn.disabled = !dockerOk;
-            }
-        });
-    }
-
-    async function loadPlaywright() {
-        try {
-            const status = await api('/playwright/docker/status');
-            if ($('playwright-auto-start')) {
-                $('playwright-auto-start').checked = !!status.autoStartOnJellyfinStartup;
-            }
-            renderPlaywrightDockerStatus(status);
-        } catch (err) {
-            reportApiError(err, 'Could not load Playwright settings.');
-        }
-    }
-
-    async function startPlaywrightDocker() {
-        try {
-            const data = await api('/playwright/docker/start', { method: 'POST', body: '{}' });
-            renderPlaywrightDockerStatus(data);
-            toast('Playwright sidecar started.', 'success');
-        } catch (err) {
-            reportApiError(err, 'Could not start Playwright sidecar.');
-        }
-    }
-
-    async function stopPlaywrightDocker() {
-        try {
-            const data = await api('/playwright/docker/stop', { method: 'POST', body: '{}' });
-            renderPlaywrightDockerStatus(data);
-            toast('Playwright sidecar stopped.', 'success');
-        } catch (err) {
-            reportApiError(err, 'Could not stop Playwright sidecar.');
-        }
-    }
-
-    async function savePlaywrightSettings() {
-        try {
-            await api('/setup/settings', {
-                method: 'PUT',
-                body: JSON.stringify({
-                    autoStartPlaywrightDockerSidecar: !!$('playwright-auto-start')?.checked
-                })
-            });
-            toast('Playwright settings saved.', 'success');
-            await loadPlaywright();
-        } catch (err) {
-            toast(err.message, 'error');
-        }
-    }
-
     async function loadGeneral() {
         try {
             const [settings, timeZones] = await Promise.all([
@@ -3947,7 +3858,6 @@
         if (name === 'ebs') loadEbs();
         if (name === 'ai') loadAi();
         if (name === 'weather') loadWeather();
-        if (name === 'playwright') loadPlaywright();
         if (name === 'presets') loadPresets();
         if (name === 'lineups') loadLineups();
         if (name === 'list') loadLists();
@@ -4099,9 +4009,6 @@
         click('btn-ws3kp-start', () => startWeatherDocker('ws3kp', true).catch((e) => toast(e.message, 'error')));
         click('btn-ws3kp-stop', () => stopWeatherDocker('ws3kp').catch((e) => toast(e.message, 'error')));
         click('btn-ws3kp-use-url', () => startWeatherDocker('ws3kp', true).catch((e) => toast(e.message, 'error')));
-        click('btn-playwright-start', () => startPlaywrightDocker().catch((e) => toast(e.message, 'error')));
-        click('btn-playwright-stop', () => stopPlaywrightDocker().catch((e) => toast(e.message, 'error')));
-        click('btn-save-playwright', savePlaywrightSettings);
         bindWeatherUrlPresets();
         change('ebs-display-mode', updateEbsFieldVisibility);
         change('ebs-audio-mode', updateEbsFieldVisibility);

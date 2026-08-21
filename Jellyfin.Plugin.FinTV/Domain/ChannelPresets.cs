@@ -34,7 +34,7 @@ public static class ChannelPresets
         Preset(122, 119.4m, "Flip Television", ChannelContentType.TvShow, "TV Shows", "Reality TV themed shows and movies", "fintv-reality", "Shows/Flip_Television.png", catalogMode: ChannelCatalogMode.Mixed),
         Preset(123, 119.5m, "BinaryGeek119 News", ChannelContentType.TvShow, "TV Shows", "News", "fintv-news", logoPath: null),
         Preset(124, 119.6m, "WeatherStar4000", ChannelContentType.Weather, "TV Shows", "Weather channel", "fintv-weatherstar4000", "Weather/WeatherStar4000.png", weather: true),
-        Preset(125, 124.1m, "Past Tense News", ChannelContentType.TvShow, "TV Shows", "Content from Jellyfin library Past Tense News only", "fintv-past-tense-news", "News/Past_Tense_News.png"),
+        Preset(125, 124.1m, "Past Tense News", ChannelContentType.TvShow, "TV Shows", "Home movies treated as live breaking news", "fintv-past-tense-news", "News/Past_Tense_News.png", catalogMode: ChannelCatalogMode.Mixed),
         Preset(128, 124.2m, "Cops And Robbers", ChannelContentType.TvShow, "TV Shows", "Crime and cop themed TV shows and movies (genre or plot)", "fintv-crime", "Shows/cops_and_robbers.png", catalogMode: ChannelCatalogMode.Mixed),
         Preset(129, 124.3m, "Slappy", ChannelContentType.TvShow, "TV Shows", "Comedy TV and movies with 6pm Slappy's Toon Takeover block", "fintv-comedy", "Shows/Slappy.png", catalogMode: ChannelCatalogMode.Mixed),
         Preset(130, 126.1m, "Winning", ChannelContentType.TvShow, "TV Shows", "Game shows channel", "fintv-game-shows", "Shows/winning.png", catalogMode: ChannelCatalogMode.Mixed),

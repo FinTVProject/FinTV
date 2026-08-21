@@ -35,7 +35,7 @@ public static class ChannelPresets
         Preset(123, 119.5m, "BinaryGeek119 News", ChannelContentType.TvShow, "TV Shows", "News", "fintv-news", logoPath: null),
         Preset(124, 119.6m, "WeatherStar4000", ChannelContentType.Weather, "TV Shows", "Live WeatherStar 4000+ MPEG-TS weather channel", "fintv-weatherstar4000", "Weather/WeatherStar4000.png", weather: true),
         Preset(124.2m, 119.7m, "WeatherStar3000", ChannelContentType.Weather, "TV Shows", "Live WeatherStar 3000+ MPEG-TS weather channel", "fintv-weatherstar3000", "Weather/WeatherStar3000.png", weather: true),
-        Preset(125, 124.1m, "Past Tense News", ChannelContentType.TvShow, "TV Shows", "Content from Jellyfin library Past Tense News only", "fintv-past-tense-news", "News/Past_Tense_News.png"),
+        Preset(125, 124.1m, "Past Tense News", ChannelContentType.TvShow, "TV Shows", "Home movies treated as live breaking news", "fintv-past-tense-news", "News/Past_Tense_News.png", catalogMode: ChannelCatalogMode.Mixed),
         Preset(123.1m, 119.8m, "FinTV News", ChannelContentType.News, "TV Shows", "Live RSS news channel with optional TTS", "fintv-live-news", logoPath: null),
         Preset(128, 124.2m, "Cops And Robbers", ChannelContentType.TvShow, "TV Shows", "Crime and cop themed TV shows and movies (genre or plot)", "fintv-crime", "Shows/cops_and_robbers.png", catalogMode: ChannelCatalogMode.Mixed),
         Preset(129, 124.3m, "Slappy", ChannelContentType.TvShow, "TV Shows", "Comedy TV and movies with 6pm Slappy's Toon Takeover block", "fintv-comedy", "Shows/Slappy.png", catalogMode: ChannelCatalogMode.Mixed),

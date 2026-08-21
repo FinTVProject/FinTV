@@ -27,6 +27,7 @@ public class DatabaseInitializer : IHostedService
         await EnsureChannelColumnsAsync(db, cancellationToken);
         await EnsureMediaItemColumnsAsync(db, cancellationToken);
         await EnsureCatalogTablesAsync(db, cancellationToken);
+        await UpgradeTvShowsToEpisodesAsync(db, cancellationToken);
         await EnsureCatalogMissingColumnsAsync(db, cancellationToken);
         await scope.ServiceProvider.GetRequiredService<CatalogTypedStore>()
             .BackfillFromMediaItemsAsync(cancellationToken);
@@ -170,7 +171,8 @@ public class DatabaseInitializer : IHostedService
 
         var statements = new[]
         {
-            $"""CREATE TABLE IF NOT EXISTS "TvShows" ({shared} "SeriesId" uuid NULL, "SeriesName" text NULL, "SeasonNumber" integer NULL, "EpisodeNumber" integer NULL, "IsSeries" boolean NOT NULL DEFAULT FALSE, CONSTRAINT "PK_TvShows" PRIMARY KEY ("Id"))""",
+            $"""CREATE TABLE IF NOT EXISTS "TvShows" ({shared} CONSTRAINT "PK_TvShows" PRIMARY KEY ("Id"))""",
+            $"""CREATE TABLE IF NOT EXISTS "Episodes" ({shared} "SeriesId" uuid NULL, "SeriesName" text NULL, "SeasonId" uuid NULL, "SeasonName" text NULL, "SeasonNumber" integer NULL, "EpisodeNumber" integer NULL, CONSTRAINT "PK_Episodes" PRIMARY KEY ("Id"))""",
             $"""CREATE TABLE IF NOT EXISTS "Movies" ({shared} CONSTRAINT "PK_Movies" PRIMARY KEY ("Id"))""",
             $"""CREATE TABLE IF NOT EXISTS "Music" ({shared} "Album" text NULL, "AlbumArtist" text NULL, "ArtistsJson" text NOT NULL DEFAULT '[]', "TrackNumber" integer NULL, "DiscNumber" integer NULL, CONSTRAINT "PK_Music" PRIMARY KEY ("Id"))""",
             $"""CREATE TABLE IF NOT EXISTS "MusicVideos" ({shared} "Album" text NULL, "ArtistsJson" text NOT NULL DEFAULT '[]', CONSTRAINT "PK_MusicVideos" PRIMARY KEY ("Id"))""",
@@ -178,6 +180,12 @@ public class DatabaseInitializer : IHostedService
             """CREATE INDEX IF NOT EXISTS "IX_TvShows_Name" ON "TvShows" ("Name")""",
             """CREATE INDEX IF NOT EXISTS "IX_TvShows_LibraryId" ON "TvShows" ("LibraryId")""",
             """CREATE INDEX IF NOT EXISTS "IX_TvShows_JellyfinItemId" ON "TvShows" ("JellyfinItemId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_Episodes_Name" ON "Episodes" ("Name")""",
+            """CREATE INDEX IF NOT EXISTS "IX_Episodes_LibraryId" ON "Episodes" ("LibraryId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_Episodes_JellyfinItemId" ON "Episodes" ("JellyfinItemId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_Episodes_SeriesId" ON "Episodes" ("SeriesId")""",
+            """ALTER TABLE "Episodes" ADD COLUMN IF NOT EXISTS "SeasonId" uuid NULL""",
+            """ALTER TABLE "Episodes" ADD COLUMN IF NOT EXISTS "SeasonName" text NULL""",
             """CREATE INDEX IF NOT EXISTS "IX_Movies_Name" ON "Movies" ("Name")""",
             """CREATE INDEX IF NOT EXISTS "IX_Movies_LibraryId" ON "Movies" ("LibraryId")""",
             """CREATE INDEX IF NOT EXISTS "IX_Movies_JellyfinItemId" ON "Movies" ("JellyfinItemId")""",
@@ -207,7 +215,7 @@ public class DatabaseInitializer : IHostedService
 
     private async Task EnsureCatalogMissingColumnsAsync(FinTvDbContext db, CancellationToken cancellationToken)
     {
-        var tables = new[] { "MediaItems", "TvShows", "Movies", "Music", "MusicVideos", "PastTenseNews" };
+        var tables = new[] { "MediaItems", "TvShows", "Episodes", "Movies", "Music", "MusicVideos", "PastTenseNews" };
         foreach (var table in tables)
         {
             var statements = new[]
@@ -228,6 +236,59 @@ public class DatabaseInitializer : IHostedService
                     _logger.LogDebug(ex, "Catalog missing-column ensure skipped for {Sql}", sql);
                 }
             }
+        }
+    }
+
+    private async Task UpgradeTvShowsToEpisodesAsync(FinTvDbContext db, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'TvShows'
+                      AND column_name = 'IsSeries'
+                ) THEN
+                    INSERT INTO "Episodes" (
+                        "Id", "Name", "SortName", "Plot", "OfficialRating", "CommunityRating", "CriticRating",
+                        "ProductionYear", "PremiereDate", "RuntimeTicks", "Format", "VideoCodec", "AudioCodec",
+                        "Width", "Height", "Path", "JellyfinItemId", "ImdbId", "TmdbId", "TvdbId", "MusicBrainzId",
+                        "ProviderIdsJson", "LibraryId", "LibraryName", "PrimaryImagePath", "GenresJson", "StarsJson",
+                        "StudiosJson", "TagsJson", "ChaptersJson", "SyncedAt", "IsMissing", "MissingSince",
+                        "SeriesId", "SeriesName", "SeasonNumber", "EpisodeNumber"
+                    )
+                    SELECT
+                        "Id", "Name", "SortName", "Plot", "OfficialRating", "CommunityRating", "CriticRating",
+                        "ProductionYear", "PremiereDate", "RuntimeTicks", "Format", "VideoCodec", "AudioCodec",
+                        "Width", "Height", "Path", "JellyfinItemId", "ImdbId", "TmdbId", "TvdbId", "MusicBrainzId",
+                        "ProviderIdsJson", "LibraryId", "LibraryName", "PrimaryImagePath", "GenresJson", "StarsJson",
+                        "StudiosJson", "TagsJson", "ChaptersJson", "SyncedAt", "IsMissing", "MissingSince",
+                        "SeriesId", "SeriesName", "SeasonNumber", "EpisodeNumber"
+                    FROM "TvShows" AS t
+                    WHERE COALESCE(t."IsSeries", FALSE) = FALSE
+                      AND NOT EXISTS (SELECT 1 FROM "Episodes" AS e WHERE e."Id" = t."Id");
+
+                    DELETE FROM "TvShows" WHERE COALESCE("IsSeries", FALSE) = FALSE;
+
+                    ALTER TABLE "TvShows" DROP COLUMN IF EXISTS "SeasonNumber";
+                    ALTER TABLE "TvShows" DROP COLUMN IF EXISTS "EpisodeNumber";
+                    ALTER TABLE "TvShows" DROP COLUMN IF EXISTS "SeriesId";
+                    ALTER TABLE "TvShows" DROP COLUMN IF EXISTS "SeriesName";
+                    ALTER TABLE "TvShows" DROP COLUMN IF EXISTS "IsSeries";
+                END IF;
+            END $$;
+            """;
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+            _logger.LogInformation("TV catalog upgrade checked: episodes live in Episodes; TvShows holds series only");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "TV catalog episode table upgrade failed");
         }
     }
 }
