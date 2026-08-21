@@ -129,27 +129,7 @@ public sealed class WeatherDataClient
             StationName = place.DisplayName
         };
 
-        var hourly = new List<WeatherHourly>();
-        if (root.TryGetProperty("hourly", out var hourlyEl))
-        {
-            var times = hourlyEl.GetProperty("time");
-            var temps = hourlyEl.GetProperty("temperature_2m");
-            var codes = hourlyEl.GetProperty("weather_code");
-            var pops = hourlyEl.TryGetProperty("precipitation_probability", out var pop) ? pop : default;
-            var count = Math.Min(24, times.GetArrayLength());
-            for (var i = 0; i < count; i++)
-            {
-                hourly.Add(new WeatherHourly
-                {
-                    Time = DateTimeOffset.Parse(times[i].GetString()!, CultureInfo.InvariantCulture),
-                    Temperature = temps[i].GetDouble(),
-                    IconKey = WeatherIconMap.FromWmo(codes[i].GetInt32()),
-                    PrecipitationChance = pops.ValueKind == JsonValueKind.Array && pops[i].ValueKind == JsonValueKind.Number
-                        ? pops[i].GetInt32()
-                        : null
-                });
-            }
-        }
+        var hourly = ReadUpcomingHourly(root, maxCount: 24);
 
         var daily = new List<WeatherDaily>();
         if (root.TryGetProperty("daily", out var dailyEl))
@@ -301,8 +281,15 @@ public sealed class WeatherDataClient
         if (!string.IsNullOrWhiteSpace(hourlyUrl))
         {
             using var hourlyDoc = JsonDocument.Parse(await client.GetStringAsync(hourlyUrl, cancellationToken));
-            foreach (var period in hourlyDoc.RootElement.GetProperty("properties").GetProperty("periods").EnumerateArray().Take(24))
+            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-20);
+            foreach (var period in hourlyDoc.RootElement.GetProperty("properties").GetProperty("periods").EnumerateArray())
             {
+                var start = period.GetProperty("startTime").GetDateTimeOffset();
+                if (start < cutoff)
+                {
+                    continue;
+                }
+
                 var temp = period.GetProperty("temperature").GetDouble();
                 if (useMetric)
                 {
@@ -311,7 +298,7 @@ public sealed class WeatherDataClient
 
                 hourly.Add(new WeatherHourly
                 {
-                    Time = period.GetProperty("startTime").GetDateTimeOffset(),
+                    Time = start,
                     Temperature = temp,
                     IconKey = WeatherIconMap.FromNwsIcon(period.TryGetProperty("icon", out var icon) ? icon.GetString() : null, period.GetProperty("shortForecast").GetString()),
                     PrecipitationChance = period.TryGetProperty("probabilityOfPrecipitation", out var pop)
@@ -320,6 +307,10 @@ public sealed class WeatherDataClient
                             ? pv.GetInt32()
                             : null
                 });
+                if (hourly.Count >= 24)
+                {
+                    break;
+                }
             }
         }
 
@@ -439,6 +430,57 @@ public sealed class WeatherDataClient
         }
 
         return frames;
+    }
+
+    private static List<WeatherHourly> ReadUpcomingHourly(JsonElement root, int maxCount)
+    {
+        var hourly = new List<WeatherHourly>();
+        if (!root.TryGetProperty("hourly", out var hourlyEl)
+            || !hourlyEl.TryGetProperty("time", out var times)
+            || times.ValueKind != JsonValueKind.Array)
+        {
+            return hourly;
+        }
+
+        var temps = hourlyEl.GetProperty("temperature_2m");
+        var codes = hourlyEl.GetProperty("weather_code");
+        var pops = hourlyEl.TryGetProperty("precipitation_probability", out var pop) ? pop : default;
+        var offset = root.TryGetProperty("utc_offset_seconds", out var offEl) && offEl.ValueKind == JsonValueKind.Number
+            ? TimeSpan.FromSeconds(offEl.GetInt32())
+            : TimeSpan.Zero;
+        var cutoff = DateTimeOffset.UtcNow.AddMinutes(-20);
+
+        for (var i = 0; i < times.GetArrayLength(); i++)
+        {
+            var raw = times[i].GetString();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                continue;
+            }
+
+            var local = DateTime.Parse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None);
+            var time = new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), offset);
+            if (time < cutoff)
+            {
+                continue;
+            }
+
+            hourly.Add(new WeatherHourly
+            {
+                Time = time,
+                Temperature = temps[i].GetDouble(),
+                IconKey = WeatherIconMap.FromWmo(codes[i].GetInt32()),
+                PrecipitationChance = pops.ValueKind == JsonValueKind.Array && pops[i].ValueKind == JsonValueKind.Number
+                    ? pops[i].GetInt32()
+                    : null
+            });
+            if (hourly.Count >= maxCount)
+            {
+                break;
+            }
+        }
+
+        return hourly;
     }
 
     private static double? GetDouble(JsonElement el, string name)

@@ -136,10 +136,18 @@ public sealed class WeatherStarCompositor
 
     private static void DrawHourly(SKCanvas canvas, WeatherSnapshot snap, SKTypeface font, int width, SKPaint white, SKPaint gold)
     {
-        var y = 90;
-        foreach (var hour in snap.Hourly.Take(8))
+        var cutoff = DateTimeOffset.UtcNow.AddMinutes(-20);
+        var hours = snap.Hourly.Where(hour => hour.Time >= cutoff).Take(8).ToList();
+        if (hours.Count == 0)
         {
-            DrawText(canvas, hour.Time.ToString("htt", CultureInfo.InvariantCulture), font, 18, 20, y, gold);
+            DrawText(canvas, "NO HOURLY DATA", font, 22, 20, 160, white);
+            return;
+        }
+
+        var y = 90;
+        foreach (var hour in hours)
+        {
+            DrawText(canvas, hour.Time.ToString("h tt", CultureInfo.InvariantCulture), font, 18, 20, y, gold);
             DrawText(canvas, Math.Round(hour.Temperature) + "°", font, 18, 140, y, white);
             DrawText(canvas, hour.PrecipitationChance is int pop ? pop + "%" : "", font, 18, 220, y, white);
             DrawText(canvas, hour.IconKey.Replace("-", " ", StringComparison.Ordinal), font, 16, 300, y, white);
