@@ -424,12 +424,12 @@ public class JellyfinCatalogService
 
     private CollectionFolder? ResolveMusicLibrary(string? libraryId, string? libraryName)
     {
-        if (!string.IsNullOrWhiteSpace(libraryId) && Guid.TryParse(libraryId, out var parsedId))
+        if (!string.IsNullOrWhiteSpace(libraryId) && Guid.TryParse(libraryId, out var parsedId) && parsedId != Guid.Empty)
         {
-            if (_libraryManager.GetItemById(parsedId) is CollectionFolder folderById
-                && IsMusicLibrary(folderById))
+            var byId = EnumerateMusicLibraries().FirstOrDefault(folder => folder.Id == parsedId);
+            if (byId is not null)
             {
-                return folderById;
+                return byId;
             }
         }
 
@@ -477,9 +477,17 @@ public class JellyfinCatalogService
     {
         if (!string.IsNullOrWhiteSpace(virtualFolder.ItemId)
             && Guid.TryParse(virtualFolder.ItemId, out var parsedId)
-            && _libraryManager.GetItemById(parsedId) is CollectionFolder folderById)
+            && parsedId != Guid.Empty)
         {
-            return folderById;
+            return new CollectionFolder
+            {
+                Id = parsedId,
+                Name = virtualFolder.Name,
+                CollectionType = virtualFolder.CollectionType,
+                Kind = BaseItemKind.Folder,
+                LibraryId = parsedId,
+                LibraryName = virtualFolder.Name
+            };
         }
 
         if (string.IsNullOrWhiteSpace(virtualFolder.Name))

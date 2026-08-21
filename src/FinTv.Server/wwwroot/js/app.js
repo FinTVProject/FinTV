@@ -3857,7 +3857,7 @@
                 id: input.dataset.channelId,
                 location: readWeatherLocation(input.value, 'Channel location')
             }));
-            await api('/weather/settings', {
+            const saved = await api('/weather/settings', {
                 method: 'PUT',
                 body: JSON.stringify({
                     weatherStarPermalinkQuery: serializeWeatherQueryFromForm(),
@@ -3871,7 +3871,7 @@
                 })
             });
             toast('Weather settings saved.', 'success');
-            await loadWeather();
+            renderWeatherStatus(saved);
             if (channels.length) {
                 await loadChannels();
             }

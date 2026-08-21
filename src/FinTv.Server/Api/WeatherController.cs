@@ -38,10 +38,22 @@ public class WeatherController : ControllerBase
             })
             .ToList();
 
+        object musicLibraries;
+        try
+        {
+            musicLibraries = _catalog.GetMusicLibraries()
+                .Select(l => new { id = l.Id, name = l.Name })
+                .ToList();
+        }
+        catch (Exception)
+        {
+            musicLibraries = Array.Empty<object>();
+        }
+
         return Ok(new
         {
             weatherStarVariant = NormalizeWeatherStarId(config?.WeatherStarVariant),
-            weatherSource = config?.WeatherSource ?? "auto",
+            weatherSource = string.IsNullOrWhiteSpace(config?.WeatherSource) ? "auto" : config.WeatherSource,
             nativeRenderer = true,
             weatherStarPermalinkQuery = config?.WeatherStarPermalinkQuery,
             weatherStarAutoWideForSixteenNine = config?.WeatherStarAutoWideForSixteenNine ?? true,
@@ -50,7 +62,7 @@ public class WeatherController : ControllerBase
             weatherDefaultLocationQuery = config?.WeatherDefaultLocationQuery
                 ?? WeatherStarChannelService.ResolveDefaultLocationQuery(),
             weatherChannels,
-            musicLibraries = _catalog.GetMusicLibraries().Select(l => new { id = l.Id, name = l.Name }),
+            musicLibraries,
             publicSite = false,
             bind = "127.0.0.1"
         });
@@ -96,15 +108,12 @@ public class WeatherController : ControllerBase
             plugin.Configuration.WeatherMusicLibraryName = request.WeatherMusicLibraryName.Trim();
         }
 
-        if (request.WeatherSource is not null)
+        plugin.Configuration.WeatherSource = WeatherDataClient.ParseSource(request.WeatherSource) switch
         {
-            plugin.Configuration.WeatherSource = WeatherDataClient.ParseSource(request.WeatherSource) switch
-            {
-                WeatherSourceKind.UnitedStates => "us",
-                WeatherSourceKind.World => "world",
-                _ => "auto"
-            };
-        }
+            WeatherSourceKind.UnitedStates => "us",
+            WeatherSourceKind.World => "world",
+            _ => "auto"
+        };
 
         var defaultLocation = request.DefaultLocation ?? request.DefaultZip;
         if (defaultLocation is not null)
