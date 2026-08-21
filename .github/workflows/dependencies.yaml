@@ -1,0 +1,66 @@
+name: Dependency updates
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+jobs:
+  nuget:
+    name: NuGet outdated
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore src/FinTv.Server/FinTv.Server.csproj
+
+      - name: Check for outdated packages
+        run: |
+          set -euo pipefail
+          dotnet list src/FinTv.Server/FinTv.Server.csproj package --outdated --format json | tee outdated.json
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          data = json.loads(Path("outdated.json").read_text(encoding="utf-8"))
+          outdated = []
+          for project in data.get("projects") or []:
+              path = project.get("path", "project")
+              for framework in project.get("frameworks") or []:
+                  for pkg in framework.get("topLevelPackages") or []:
+                      resolved = pkg.get("resolvedVersion")
+                      latest = pkg.get("latestVersion")
+                      if resolved and latest and resolved != latest:
+                          outdated.append(
+                              f"{pkg.get('id')} {resolved} -> {latest} ({path})"
+                          )
+
+          lines = ["## NuGet packages", ""]
+          if outdated:
+              lines.append("Outdated direct packages:")
+              lines.extend(f"- {item}" for item in outdated)
+          else:
+              lines.append("All direct NuGet packages are up to date.")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+          if outdated:
+              print("Outdated packages:")
+              print("\n".join(outdated))
+              sys.exit(1)
+
+          print("All direct NuGet packages are up to date.")
+          PY
