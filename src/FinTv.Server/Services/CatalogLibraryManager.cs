@@ -3,6 +3,7 @@ using FinTv;
 using FinTv.Data;
 using FinTv.Domain;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FinTv.Services;
 
@@ -23,13 +24,28 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
 
     public BaseItem? GetItemById(Guid id)
     {
+        var reported = FinTvRuntime.Current?.Configuration.JellyfinLibraries.Libraries
+            .FirstOrDefault(library => library.Id == id);
+        if (reported is not null)
+        {
+            return new CollectionFolder
+            {
+                Id = reported.Id,
+                Name = reported.Name,
+                CollectionType = reported.CollectionType,
+                Kind = BaseItemKind.Folder,
+                LibraryId = reported.Id,
+                LibraryName = reported.Name
+            };
+        }
+
         var tv = _db.TvShows.AsNoTracking().FirstOrDefault(row => row.Id == id);
         if (tv is not null)
         {
             return Map(tv, BaseItemKind.Series);
         }
 
-        var episodeRow = _db.Episodes.AsNoTracking().FirstOrDefault(row => row.Id == id);
+        var episodeRow = TryGetEpisode(id);
         if (episodeRow is not null)
         {
             var item = Map(episodeRow, BaseItemKind.Episode);
@@ -69,23 +85,20 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
             return MapNews(news);
         }
 
-        var reported = FinTvRuntime.Current?.Configuration.JellyfinLibraries.Libraries
-            .FirstOrDefault(library => library.Id == id);
-        if (reported is not null)
-        {
-            return new CollectionFolder
-            {
-                Id = reported.Id,
-                Name = reported.Name,
-                CollectionType = reported.CollectionType,
-                Kind = BaseItemKind.Folder,
-                LibraryId = reported.Id,
-                LibraryName = reported.Name
-            };
-        }
-
         var row = _db.MediaItems.AsNoTracking().FirstOrDefault(item => item.Id == id);
         return row is null ? null : Map(row, includeSeries: true);
+    }
+
+    private EpisodeRow? TryGetEpisode(Guid id)
+    {
+        try
+        {
+            return _db.Episodes.AsNoTracking().FirstOrDefault(row => row.Id == id);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UndefinedTable)
+        {
+            return null;
+        }
     }
 
     public QueryResult<BaseItem> GetItemsResult(InternalItemsQuery query)
@@ -223,14 +236,20 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
 
         if (wantAll || kinds!.Contains(BaseItemKind.Episode))
         {
-            IQueryable<EpisodeRow> episodes = _db.Episodes.AsNoTracking().Where(row => !row.IsMissing);
-            if (parentId != Guid.Empty)
+            try
             {
-                episodes = episodes.Where(row => row.SeriesId == parentId || row.Id == parentId || row.LibraryId == parentId);
-            }
+                IQueryable<EpisodeRow> episodes = _db.Episodes.AsNoTracking().Where(row => !row.IsMissing);
+                if (parentId != Guid.Empty)
+                {
+                    episodes = episodes.Where(row => row.SeriesId == parentId || row.Id == parentId || row.LibraryId == parentId);
+                }
 
-            episodes = ApplyNameFilter(episodes, query);
-            items.AddRange(episodes.AsEnumerable().Select(row => Map(row, BaseItemKind.Episode)));
+                episodes = ApplyNameFilter(episodes, query);
+                items.AddRange(episodes.AsEnumerable().Select(row => Map(row, BaseItemKind.Episode)));
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UndefinedTable)
+            {
+            }
         }
 
         if (wantAll
