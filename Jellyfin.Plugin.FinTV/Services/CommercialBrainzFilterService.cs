@@ -6,14 +6,14 @@ namespace Jellyfin.Plugin.FinTV.Services;
 
 public class CommercialBrainzFilterService
 {
-    public bool Matches(CommercialBrainzSettings settings, CommercialBrainzVideoSummary video)
+    public bool Matches(CommercialBrainzSettings settings, CommercialBrainzVideoSummary video, bool requireEnabled = true)
     {
-        if (!settings.Enabled)
+        if (requireEnabled && !settings.Enabled)
         {
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(video.YoutubeUrl))
+        if (string.IsNullOrWhiteSpace(video.GetYouTubeUrl()))
         {
             return false;
         }
@@ -21,10 +21,10 @@ public class CommercialBrainzFilterService
         var tags = NormalizeTags(video.Tags);
         var metadata = video.Metadata ?? new Dictionary<string, JsonElement>();
         var classification = Classify(tags, metadata, video.Visibility, GetAgeLimit(metadata));
-        var year = video.Commercial?.Year;
+        var year = video.GetYear();
         var decade = video.Commercial?.Decade ?? (year.HasValue ? (year.Value / 10) * 10 : null);
-        var brand = video.Advertiser?.Name ?? string.Empty;
-        var title = video.Commercial?.Title ?? brand;
+        var brand = video.GetBrand() ?? string.Empty;
+        var title = video.GetTitle();
 
         if (settings.MinYear.HasValue && (!year.HasValue || year.Value < settings.MinYear.Value))
         {
@@ -132,24 +132,21 @@ public class CommercialBrainzFilterService
         var tags = NormalizeTags(video.Tags);
         var metadata = video.Metadata ?? new Dictionary<string, JsonElement>();
         var classification = Classify(tags, metadata, video.Visibility, GetAgeLimit(metadata));
-        var title = video.Commercial?.Title;
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            title = video.Advertiser?.Name ?? video.ChannelName ?? video.YoutubeId ?? "Commercial";
-        }
+        var title = video.GetTitle();
+        var year = video.GetYear();
 
         return new Commercial
         {
             Source = CommercialSource.CommercialBrainz,
             JellyfinItemId = Guid.Empty,
             CommercialBrainzVideoSbid = video.Sbid.ToString("D"),
-            YouTubeUrl = video.YoutubeUrl,
-            YouTubeVideoId = video.YoutubeId,
+            YouTubeUrl = video.GetYouTubeUrl(),
+            YouTubeVideoId = video.GetYouTubeId(),
             Title = title,
-            Duration = TimeSpan.FromMilliseconds(Math.Max(1000, video.DurationMs ?? 30000)),
-            Brand = video.Advertiser?.Name,
-            Year = video.Commercial?.Year,
-            Decade = video.Commercial?.Decade ?? (video.Commercial?.Year is int year ? (year / 10) * 10 : null),
+            Duration = TimeSpan.FromSeconds(Math.Max(1, video.GetDurationSeconds())),
+            Brand = video.GetBrand(),
+            Year = year,
+            Decade = video.Commercial?.Decade ?? (year is int commercialYear ? (commercialYear / 10) * 10 : null),
             Network = video.Network,
             ChannelName = video.ChannelName,
             AgeLimit = classification.AgeLimit,

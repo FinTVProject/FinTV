@@ -1,0 +1,26 @@
+---
+name: "FinTV"
+guid: "f4e8a2b1-3c5d-4e6f-9a8b-7c6d5e4f3a2b"
+version: "0.0.3.0"
+targetAbi: "12.0.0.0"
+framework: "net10.0"
+owner: "binarygeek119"
+imageUrl: "https://raw.githubusercontent.com/binarygeek119/FinTV-Plugin/master/logo.png"
+overview: "Thin Jellyfin bridge for FinTV Server — catalog sync, Live TV registration, and blackframe chapters"
+description: >
+  Connects Jellyfin to FinTV Server. Syncs library metadata, paths, and chapters,
+  registers M3U/XMLTV Live TV, and runs commercial blackframe detection.
+category: "LiveTV"
+assemblies:
+  - "Jellyfin.Plugin.FinTV.dll"
+  - "CliWrap.dll"
+  - "Microsoft.Bcl.AsyncInterfaces.dll"
+artifacts:
+  - "Jellyfin.Plugin.FinTV.dll"
+  - "CliWrap.dll"
+  - "Microsoft.Bcl.AsyncInterfaces.dll"
+changelog: |-
+  - Split FinTV into FinTV Server plus a thin Jellyfin plugin
+  - Sync library metadata, file paths, and chapters to FinTV Server
+  - Auto-register Live TV M3U and XMLTV
+  - Keep blackframe commercial chapter detection in Jellyfin

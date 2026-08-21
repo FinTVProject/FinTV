@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: fintv
+      POSTGRES_USER: fintv
+      POSTGRES_PASSWORD: fintv
+    volumes:
+      - fintv-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fintv"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  fintv-server:
+    image: ghcr.io/binarygeek119/fintv-server:latest
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8097:8097"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: fintv
+      POSTGRES_USER: fintv
+      POSTGRES_PASSWORD: fintv
+      FINTV_API_KEY: change-me
+      FINTV_ADMIN_USER: admin
+      FINTV_ADMIN_PASSWORD: changeme
+      JELLYFIN_URL: http://jellyfin:8096
+      TZ: America/Chicago
+      PUID: "99"
+      PGID: "100"
+    volumes:
+      - /mnt/user/appdata/fintv-server:/config
+      - /mnt/user/media:/media
+
+volumes:
+  fintv-pgdata:

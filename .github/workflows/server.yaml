@@ -1,0 +1,23 @@
+name: Build FinTV Server
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish server
+        run: dotnet publish src/FinTv.Server/FinTv.Server.csproj -c Release /p:SkipLogoFetch=true
+      - name: Build plugin
+        run: dotnet build plugin/Jellyfin.Plugin.FinTV/Jellyfin.Plugin.FinTV.csproj -c Release

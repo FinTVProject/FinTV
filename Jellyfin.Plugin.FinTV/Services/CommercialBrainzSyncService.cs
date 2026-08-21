@@ -29,32 +29,46 @@ public class CommercialBrainzSyncService
     public async Task<CommercialBrainzPreviewResult> PreviewAsync(CancellationToken cancellationToken = default)
     {
         var settings = GetSettings();
+        var baseUrl = CommercialBrainzSettings.NormalizeBaseUrl(settings.BaseUrl);
         var fetched = 0;
         var matched = 0;
         var samples = new List<CommercialBrainzPreviewItem>();
+        const int previewCap = 48;
+        const int scanCap = 120;
+        var enrichDetails = PreviewNeedsEnrichment(settings);
 
-        await foreach (var video in EnumerateCandidatesAsync(settings, cancellationToken))
+        await foreach (var video in EnumerateCandidatesAsync(settings, enrichDetails, cancellationToken))
         {
             fetched++;
-            if (!_filter.Matches(settings, video))
+            if (!_filter.Matches(settings, video, requireEnabled: false))
             {
+                if (fetched >= scanCap)
+                {
+                    break;
+                }
+
                 continue;
             }
 
             matched++;
-            if (samples.Count < 12)
+            if (samples.Count < previewCap)
             {
                 samples.Add(new CommercialBrainzPreviewItem
                 {
-                    Title = video.Commercial?.Title ?? video.Advertiser?.Name ?? video.YoutubeId ?? "Commercial",
-                    Brand = video.Advertiser?.Name,
-                    Year = video.Commercial?.Year,
+                    Title = video.GetTitle(),
+                    Brand = video.GetBrand(),
+                    Year = video.GetYear(),
                     Network = video.Network,
-                    YouTubeUrl = video.YoutubeUrl
+                    ChannelName = video.ChannelName,
+                    DurationSeconds = video.GetDurationSeconds(),
+                    ThumbnailUrl = video.GetThumbnailUrl(baseUrl),
+                    CommercialPageUrl = video.GetCommercialPageUrl(baseUrl),
+                    YouTubeUrl = video.GetYouTubeUrl(),
+                    YouTubeVideoId = video.GetYouTubeId()
                 });
             }
 
-            if (matched >= settings.MaxSyncResults)
+            if (samples.Count >= previewCap || fetched >= scanCap || matched >= settings.MaxSyncResults)
             {
                 break;
             }
@@ -62,6 +76,7 @@ public class CommercialBrainzSyncService
 
         return new CommercialBrainzPreviewResult
         {
+            Enabled = settings.Enabled,
             FetchedCount = fetched,
             MatchedCount = matched,
             Samples = samples
@@ -89,7 +104,7 @@ public class CommercialBrainzSyncService
             var matched = 0;
             var syncedSbids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            await foreach (var video in EnumerateCandidatesAsync(settings, cancellationToken))
+            await foreach (var video in EnumerateCandidatesAsync(settings, enrichDetails: true, cancellationToken))
             {
                 fetched++;
                 if (!_filter.Matches(settings, video))
@@ -161,8 +176,12 @@ public class CommercialBrainzSyncService
         }
     }
 
+    public Task<byte[]?> GetYouTubeThumbnailAsync(string? youtubeId, CancellationToken cancellationToken = default)
+        => _client.GetYouTubeThumbnailAsync(youtubeId, cancellationToken);
+
     private async IAsyncEnumerable<CommercialBrainzVideoSummary> EnumerateCandidatesAsync(
         CommercialBrainzSettings settings,
+        bool enrichDetails,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var seen = new HashSet<Guid>();
@@ -170,7 +189,7 @@ public class CommercialBrainzSyncService
 
         if (settings.Tags.Count == 1)
         {
-            await foreach (var video in BrowseAllAsync(settings, limit, seen, tag: settings.Tags[0], cancellationToken: cancellationToken))
+            await foreach (var video in BrowseAllAsync(settings, limit, seen, enrichDetails, tag: settings.Tags[0], cancellationToken: cancellationToken))
             {
                 yield return video;
             }
@@ -186,7 +205,7 @@ public class CommercialBrainzSyncService
                 foreach (var advertiser in advertisers.Items)
                 {
                     var advertiserSbid = advertiser.Sbid.ToString("D");
-                    await foreach (var video in BrowseAllAsync(settings, advertiserSbid: advertiserSbid, limit: limit, seen: seen, cancellationToken: cancellationToken))
+                    await foreach (var video in BrowseAllAsync(settings, limit, seen, enrichDetails, advertiserSbid: advertiserSbid, cancellationToken: cancellationToken))
                     {
                         yield return video;
                     }
@@ -196,7 +215,7 @@ public class CommercialBrainzSyncService
             yield break;
         }
 
-        await foreach (var video in BrowseAllAsync(settings, limit: limit, seen: seen, cancellationToken: cancellationToken))
+        await foreach (var video in BrowseAllAsync(settings, limit, seen, enrichDetails, cancellationToken: cancellationToken))
         {
             yield return video;
         }
@@ -206,6 +225,7 @@ public class CommercialBrainzSyncService
         CommercialBrainzSettings settings,
         int limit,
         HashSet<Guid> seen,
+        bool enrichDetails,
         string? advertiserSbid = null,
         string? tag = null,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -230,7 +250,7 @@ public class CommercialBrainzSyncService
                 }
 
                 var enriched = item;
-                if (NeedsDetail(item))
+                if (enrichDetails && NeedsDetail(settings, item))
                 {
                     var detail = await _client.GetVideoAsync(settings, item.Sbid, cancellationToken);
                     if (detail is not null)
@@ -251,11 +271,38 @@ public class CommercialBrainzSyncService
         }
     }
 
-    private static bool NeedsDetail(CommercialBrainzVideoSummary video)
+    private static bool PreviewNeedsEnrichment(CommercialBrainzSettings settings)
     {
-        return video.Tags.Count == 0
-            || video.Commercial is null
-            || video.Advertiser is null;
+        return settings.Tags.Count > 0
+            || settings.ExcludeTags.Count > 0
+            || settings.Brands.Count > 0
+            || settings.Genres.Count > 0;
+    }
+
+    private static bool NeedsDetail(CommercialBrainzSettings settings, CommercialBrainzVideoSummary video)
+    {
+        if (string.IsNullOrWhiteSpace(video.GetYouTubeUrl()) && string.IsNullOrWhiteSpace(video.GetYouTubeId()))
+        {
+            return true;
+        }
+
+        if ((settings.Tags.Count > 0 || settings.ExcludeTags.Count > 0) && video.Tags.Count == 0)
+        {
+            return true;
+        }
+
+        if (settings.Brands.Count > 0 && string.IsNullOrWhiteSpace(video.GetBrand()))
+        {
+            return true;
+        }
+
+        if ((settings.MinYear.HasValue || settings.MaxYear.HasValue || settings.Decades.Count > 0)
+            && video.GetYear() is null)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static void UpdateExisting(Commercial existing, Commercial mapped)
@@ -299,6 +346,8 @@ public class CommercialBrainzSyncService
 
 public class CommercialBrainzPreviewResult
 {
+    public bool Enabled { get; set; }
+
     public int FetchedCount { get; set; }
 
     public int MatchedCount { get; set; }
@@ -316,5 +365,18 @@ public class CommercialBrainzPreviewItem
 
     public string? Network { get; set; }
 
+    public string? ChannelName { get; set; }
+
+    public int DurationSeconds { get; set; }
+
+    public string? ThumbnailUrl { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("commercialPageUrl")]
+    public string? CommercialPageUrl { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("youtubeUrl")]
     public string? YouTubeUrl { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("youtubeVideoId")]
+    public string? YouTubeVideoId { get; set; }
 }

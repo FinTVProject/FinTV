@@ -81,6 +81,7 @@ public class WeatherStarChannelService
         var (width, height) = GetResolution(channel);
         var ffmpegPath = _mediaEncoder.EncoderPath;
         var backgroundMusicPath = _ebs.ResolveBackgroundMusicPath();
+        var hasCoordinates = WeatherLocationParser.TryParseLatLon(locationQuery, out var latitude, out var longitude);
 
         IBrowser? browser = null;
         var sharedDockerCdp = false;
@@ -88,21 +89,33 @@ public class WeatherStarChannelService
         {
             using var playwright = await _playwrightRuntime.CreateAsync(cancellationToken);
             (browser, sharedDockerCdp) = await _playwrightRuntime.ConnectBrowserAsync(playwright, cancellationToken);
-            await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+            var contextOptions = new BrowserNewContextOptions
             {
                 ViewportSize = new ViewportSize { Width = width, Height = height }
-            });
+            };
+            if (hasCoordinates)
+            {
+                contextOptions.Geolocation = new Geolocation
+                {
+                    Latitude = (float)latitude,
+                    Longitude = (float)longitude
+                };
+                contextOptions.Permissions = new[] { "geolocation" };
+            }
+
+            await using var context = await browser.NewContextAsync(contextOptions);
             var page = await context.NewPageAsync();
             await NavigateToWeatherAsync(page, weatherPageUrl, cancellationToken);
 
             using var frameStream = new ScreenshotFrameStream();
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var ffmpegStderr = new System.Text.StringBuilder();
 
             var ffmpegTask = CliWrap.Cli.Wrap(ffmpegPath)
                 .WithArguments(_ffmpegBuilder.BuildWeatherCommand(width, height, CaptureFps, backgroundMusicPath))
                 .WithStandardInputPipe(CliWrap.PipeSource.FromStream(frameStream))
                 .WithStandardOutputPipe(CliWrap.PipeTarget.ToStream(output))
-                .WithStandardErrorPipe(CliWrap.PipeTarget.ToStringBuilder(new System.Text.StringBuilder()))
+                .WithStandardErrorPipe(CliWrap.PipeTarget.ToStringBuilder(ffmpegStderr))
                 .WithValidation(CliWrap.CommandResultValidation.None)
                 .ExecuteAsync(linkedCts.Token);
 
@@ -119,7 +132,14 @@ public class WeatherStarChannelService
 
             try
             {
-                await ffmpegTask;
+                var ffmpegResult = await ffmpegTask;
+                if (ffmpegResult.ExitCode != 0 && ffmpegStderr.Length > 0)
+                {
+                    _logger.LogWarning(
+                        "Weather ffmpeg exited {ExitCode}: {Stderr}",
+                        ffmpegResult.ExitCode,
+                        ffmpegStderr.ToString().Trim());
+                }
             }
             catch (OperationCanceledException)
             {
@@ -164,6 +184,13 @@ public class WeatherStarChannelService
         var trimmedLocation = locationQuery.Trim();
         parameters["latLonQuery"] = trimmedLocation;
         parameters["txtLocation"] = trimmedLocation;
+        if (WeatherLocationParser.TryParseLatLon(trimmedLocation, out var latitude, out var longitude))
+        {
+            parameters["lat"] = latitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            parameters["lon"] = longitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            parameters["latLon"] =
+                $"{{\"lat\":{latitude.ToString(System.Globalization.CultureInfo.InvariantCulture)},\"lon\":{longitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}";
+        }
 
         return $"{root}?{FormatQueryParameters(parameters)}";
     }
@@ -273,18 +300,55 @@ public class WeatherStarChannelService
                     : $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"));
     }
 
-    private static async Task NavigateToWeatherAsync(IPage page, string weatherPageUrl, CancellationToken cancellationToken)
+    private async Task NavigateToWeatherAsync(IPage page, string weatherPageUrl, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Opening WeatherStar page {Url}", weatherPageUrl);
         await page.GotoAsync(weatherPageUrl, new PageGotoOptions
         {
-            WaitUntil = WaitUntilState.NetworkIdle,
-            Timeout = 60000
+            WaitUntil = WaitUntilState.DOMContentLoaded,
+            Timeout = 45000
         });
-        await page.WaitForTimeoutAsync(5000);
+        await TryStartWeatherPlaybackAsync(page);
+        await page.WaitForTimeoutAsync(2500);
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    private static async Task CaptureWeatherLoopAsync(
+    private static async Task TryStartWeatherPlaybackAsync(IPage page)
+    {
+        var selectors = new[]
+        {
+            "button:has-text('GO')",
+            "button:has-text('Press Here')",
+            "button:has-text('Play')",
+            "text=Press Here",
+            "#btn-kiosk",
+            ".play-button"
+        };
+
+        foreach (var selector in selectors)
+        {
+            try
+            {
+                var locator = page.Locator(selector).First;
+                if (await locator.CountAsync() == 0)
+                {
+                    continue;
+                }
+
+                if (await locator.IsVisibleAsync())
+                {
+                    await locator.ClickAsync(new LocatorClickOptions { Timeout = 2000 });
+                    return;
+                }
+            }
+            catch
+            {
+                // Keep looking; kiosk mode may already be running.
+            }
+        }
+    }
+
+    private async Task CaptureWeatherLoopAsync(
         IPage page,
         string weatherPageUrl,
         ScreenshotFrameStream frameStream,

@@ -4,7 +4,7 @@ namespace Jellyfin.Plugin.FinTV.Configuration;
 
 public class CommercialBrainzSettings
 {
-    public const string DefaultBaseUrl = "https://commercialbrainz.duckdns.org";
+    public const string DefaultBaseUrl = "https://commercialbrainz.org";
 
     public bool Enabled { get; set; } = true;
 
@@ -53,6 +53,21 @@ public class CommercialBrainzSettings
     public bool AllowBanned { get; set; }
 
     public CommercialBrainzSyncState SyncState { get; set; } = new();
+
+    public static string NormalizeBaseUrl(string? baseUrl)
+    {
+        var value = string.IsNullOrWhiteSpace(baseUrl)
+            ? DefaultBaseUrl
+            : baseUrl.Trim().TrimEnd('/');
+
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && string.Equals(uri.Host, "commercialbrainz.duckdns.org", StringComparison.OrdinalIgnoreCase))
+        {
+            return DefaultBaseUrl;
+        }
+
+        return value;
+    }
 }
 
 public class CommercialBrainzSyncState

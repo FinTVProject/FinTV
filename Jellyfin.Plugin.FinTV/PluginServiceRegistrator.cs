@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Jellyfin.Plugin.FinTV.Data;
 using Jellyfin.Plugin.FinTV.Domain;
@@ -39,6 +40,12 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
             {
                 UseProxy = false,
                 AutomaticDecompression = DecompressionMethods.All
+            });
+        serviceCollection.AddHttpClient(nameof(CommercialBrainzClient))
+            .ConfigureHttpClient(client =>
+            {
+                client.Timeout = TimeSpan.FromMinutes(5);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("FinTV/0.0.2 (CommercialBrainz)");
             });
         serviceCollection.AddHttpClient();
         serviceCollection.AddScoped<ChannelService>();

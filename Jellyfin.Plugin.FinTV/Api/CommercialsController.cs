@@ -73,9 +73,7 @@ public class CommercialsController : ControllerBase
 
         var settings = plugin.Configuration.CommercialBrainz ?? new CommercialBrainzSettings();
         settings.Enabled = request.Enabled;
-        settings.BaseUrl = string.IsNullOrWhiteSpace(request.BaseUrl)
-            ? CommercialBrainzSettings.DefaultBaseUrl
-            : request.BaseUrl.Trim().TrimEnd('/');
+        settings.BaseUrl = CommercialBrainzSettings.NormalizeBaseUrl(request.BaseUrl);
         settings.ApiToken = string.IsNullOrWhiteSpace(request.ApiToken)
             ? settings.ApiToken
             : request.ApiToken.Trim();
@@ -132,6 +130,25 @@ public class CommercialsController : ControllerBase
     }
 
     /// <summary>
+    /// Proxies a YouTube thumbnail so the FinTV dashboard can display preview cards.
+    /// </summary>
+    /// <param name="youtubeId">YouTube video id.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>JPEG thumbnail bytes.</returns>
+    [HttpGet("brainz/thumbnail/{youtubeId}")]
+    [ResponseCache(Duration = 86400, Location = ResponseCacheLocation.Client)]
+    public async Task<IActionResult> GetBrainzThumbnail(string youtubeId, CancellationToken cancellationToken)
+    {
+        var bytes = await _commercialBrainz.GetYouTubeThumbnailAsync(youtubeId, cancellationToken);
+        if (bytes is null || bytes.Length == 0)
+        {
+            return NotFound();
+        }
+
+        return File(bytes, "image/jpeg");
+    }
+
+    /// <summary>
     /// Syncs commercials from CommercialBrainz using the configured filters.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -182,9 +199,7 @@ public class CommercialsController : ControllerBase
         return new
         {
             enabled = settings.Enabled,
-            baseUrl = string.IsNullOrWhiteSpace(settings.BaseUrl)
-                ? CommercialBrainzSettings.DefaultBaseUrl
-                : settings.BaseUrl.Trim().TrimEnd('/'),
+            baseUrl = CommercialBrainzSettings.NormalizeBaseUrl(settings.BaseUrl),
             hasApiToken = !string.IsNullOrWhiteSpace(settings.ApiToken),
             poolMode = (int)settings.PoolMode,
             maxSyncResults = settings.MaxSyncResults,

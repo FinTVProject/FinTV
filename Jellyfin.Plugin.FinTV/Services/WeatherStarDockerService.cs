@@ -52,13 +52,16 @@ public class WeatherStarDockerService
 
         var httpReachable = false;
         var httpListeningInsideSidecar = false;
-        if (running && !staleNetworkAttachment)
+        if (running)
         {
             httpListeningInsideSidecar = await TryContainerInternalProbeAsync(
                 definition.ContainerName,
                 definition.ContainerPort,
                 cancellationToken);
-            httpReachable = await ProbeHttpReadyAsync(definition, settings, sharesJellyfinNetwork, cancellationToken);
+            if (!staleNetworkAttachment)
+            {
+                httpReachable = await ProbeHttpReadyAsync(definition, settings, sharesJellyfinNetwork, cancellationToken);
+            }
         }
 
         var baseUrl = BuildBaseUrl(definition, settings, sharesJellyfinNetwork);
@@ -468,9 +471,8 @@ public class WeatherStarDockerService
             if (await TryContainerInternalProbeAsync(definition.ContainerName, definition.ContainerPort, cancellationToken))
             {
                 _logger.LogDebug(
-                    "WeatherStar ready via in-container probe on {ContainerName}",
+                    "WeatherStar is listening inside {ContainerName}; waiting for Jellyfin network route",
                     definition.ContainerName);
-                return true;
             }
 
             await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
@@ -514,12 +516,20 @@ public class WeatherStarDockerService
         WeatherStarDockerSettings settings,
         bool sharesJellyfinNetwork)
     {
-        yield return BuildBaseUrl(definition, settings, sharesJellyfinNetwork);
-
-        if (!sharesJellyfinNetwork && File.Exists("/.dockerenv"))
+        var urls = new List<string>
         {
-            yield return $"http://host.docker.internal:{settings.HostPort}";
+            BuildBaseUrl(definition, settings, sharesJellyfinNetwork)
+        };
+
+        if (File.Exists("/.dockerenv"))
+        {
+            urls.Add($"http://127.0.0.1:{definition.ContainerPort}");
+            urls.Add($"http://127.0.0.1:{settings.HostPort}");
+            urls.Add($"http://host.docker.internal:{definition.ContainerPort}");
+            urls.Add($"http://host.docker.internal:{settings.HostPort}");
         }
+
+        return urls.Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
     private async Task<bool> TryHttpProbeAsync(HttpClient http, string url, CancellationToken cancellationToken)
@@ -596,8 +606,9 @@ public class WeatherStarDockerService
 
         if (httpListeningInsideSidecar)
         {
-            return "WeatherStar responds inside the container but Jellyfin cannot reach it on loopback. "
-                + "This usually means a stale network namespace — click Stop, then Start.";
+            return sharesJellyfinNetwork
+                ? "WeatherStar responds inside the sidecar but not on Jellyfin loopback. Recreating with a shared network namespace — click Start."
+                : "WeatherStar responds inside the container but Jellyfin cannot reach it. Click Stop, then Start so it can share Jellyfin's network.";
         }
 
         return $"Container is running but HTTP is not responding. Click Stop, then Start. Check docker logs {containerName} if it keeps failing.";

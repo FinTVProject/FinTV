@@ -1,0 +1,78 @@
+using FinTv.Configuration;
+using FinTv.Data;
+using FinTv.Domain;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinTv;
+
+public sealed class FinTvRuntime
+{
+    public static FinTvRuntime Current { get; set; } = null!;
+
+    private readonly IServiceScopeFactory _scopeFactory;
+    private PluginConfiguration _configuration = new();
+
+    public FinTvRuntime(IServiceScopeFactory scopeFactory, IWebHostEnvironment env, IConfiguration config)
+    {
+        _scopeFactory = scopeFactory;
+        var configDir = config["FINTV_CONFIG"] ?? Path.Combine(env.ContentRootPath, "config");
+        DataFolder = configDir;
+        LogosFolder = Path.Combine(configDir, "logos");
+        EbsFolder = Path.Combine(configDir, "ebs");
+        EbsCustomSlatesFolder = Path.Combine(EbsFolder, "custom");
+        WeatherStarFolder = Path.Combine(configDir, "weatherstar");
+        NewsFolder = Path.Combine(configDir, "news");
+        BundledLogosFolder = Path.Combine(env.ContentRootPath, "wwwroot", "logos", "binarygeek119");
+        Directory.CreateDirectory(DataFolder);
+        Directory.CreateDirectory(LogosFolder);
+        Directory.CreateDirectory(EbsCustomSlatesFolder);
+        Directory.CreateDirectory(WeatherStarFolder);
+        Directory.CreateDirectory(NewsFolder);
+        Current = this;
+    }
+
+    public string DataFolder { get; }
+
+    public string LogosFolder { get; }
+
+    public string EbsFolder { get; }
+
+    public string EbsCustomSlatesFolder { get; }
+
+    public string WeatherStarFolder { get; }
+
+    public string NewsFolder { get; }
+
+    public string BundledLogosFolder { get; }
+
+    public PluginConfiguration Configuration => _configuration;
+
+    public async Task LoadAsync(CancellationToken cancellationToken = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<FinTvDbContext>();
+        var row = await db.AppSettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
+        if (row is null || string.IsNullOrWhiteSpace(row.Json))
+        {
+            _configuration = new PluginConfiguration();
+            return;
+        }
+
+        _configuration = FinTvJson.Deserialize<PluginConfiguration>(row.Json) ?? new PluginConfiguration();
+    }
+
+    public void SaveConfiguration()
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<FinTvDbContext>();
+        var row = db.AppSettings.FirstOrDefault(r => r.Id == 1);
+        if (row is null)
+        {
+            row = new AppSettingsRow { Id = 1 };
+            db.AppSettings.Add(row);
+        }
+
+        row.Json = FinTvJson.Serialize(_configuration);
+        db.SaveChanges();
+    }
+}

@@ -441,65 +441,64 @@ public class FfmpegCommandBuilder
         string? audioPath)
     {
         var fps = captureFps.ToString(CultureInfo.InvariantCulture);
-        var context = CreateEncodingContext(width, height);
-        var vf = _encoding.AdaptVideoFilterForEncoder($"scale={width}:{height}", context.Encoder);
+        var gop = Math.Max(12, (int)Math.Round(captureFps * 2));
+        var hasAudio = !string.IsNullOrWhiteSpace(audioPath) && File.Exists(audioPath);
 
-        if (!string.IsNullOrWhiteSpace(audioPath) && File.Exists(audioPath))
-        {
-            var args = new List<string>
-            {
-                "-hide_banner",
-                "-loglevel", "warning"
-            };
-            args.AddRange(context.HardwareDeviceArgs);
-            args.AddRange(new[]
-            {
-                "-f", "image2pipe",
-                "-framerate", fps,
-                "-i", "pipe:0",
-                "-stream_loop", "-1",
-                "-i", audioPath,
-                "-vf", vf,
-                "-map", "0:v",
-                "-map", "1:a"
-            });
-            AppendVideoEncoderArgs(args, context, stillImage: true);
-            args.AddRange(new[]
-            {
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-f", "mpegts",
-                "pipe:1"
-            });
-            return args;
-        }
-
-        var silentArgs = new List<string>
+        var args = new List<string>
         {
             "-hide_banner",
-            "-loglevel", "warning"
-        };
-        silentArgs.AddRange(context.HardwareDeviceArgs);
-        silentArgs.AddRange(new[]
-        {
+            "-loglevel", "warning",
+            "-fflags", "+genpts",
+            "-thread_queue_size", "512",
             "-f", "image2pipe",
+            "-vcodec", "mjpeg",
             "-framerate", fps,
-            "-i", "pipe:0",
-            "-f", "lavfi",
-            "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
-            "-vf", vf,
-            "-map", "0:v",
-            "-map", "1:a"
-        });
-        AppendVideoEncoderArgs(silentArgs, context, stillImage: true);
-        silentArgs.AddRange(new[]
+            "-i", "pipe:0"
+        };
+
+        if (hasAudio)
         {
+            args.AddRange(new[]
+            {
+                "-stream_loop", "-1",
+                "-i", audioPath!
+            });
+        }
+        else
+        {
+            args.AddRange(new[]
+            {
+                "-f", "lavfi",
+                "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"
+            });
+        }
+
+        args.AddRange(new[]
+        {
+            "-vf", $"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p",
+            "-map", "0:v",
+            "-map", "1:a",
+            "-c:v", "libx264",
+            "-preset", "veryfast",
+            "-tune", "zerolatency",
+            "-profile:v", "baseline",
+            "-level", "3.1",
+            "-pix_fmt", "yuv420p",
+            "-g", gop.ToString(CultureInfo.InvariantCulture),
+            "-keyint_min", Math.Max(1, (int)Math.Round(captureFps)).ToString(CultureInfo.InvariantCulture),
+            "-sc_threshold", "0",
+            "-bf", "0",
             "-c:a", "aac",
             "-b:a", "192k",
+            "-ac", "2",
+            "-ar", "48000",
             "-f", "mpegts",
+            "-mpegts_flags", "+resend_headers+initial_discontinuity",
+            "-flush_packets", "1",
             "pipe:1"
         });
-        return silentArgs;
+
+        return args;
     }
 
     public IReadOnlyList<string> BuildOfflineSlateCommand(Channel channel)

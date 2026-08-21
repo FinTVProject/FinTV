@@ -1,0 +1,8 @@
+.git
+artifacts
+**/bin
+**/obj
+plugin
+Jellyfin.Plugin.FinTV
+artifacts
+*.zip

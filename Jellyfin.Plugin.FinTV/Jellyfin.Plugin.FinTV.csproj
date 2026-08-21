@@ -22,7 +22,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
       <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="CliWrap" Version="3.6.6" />
     <PackageReference Include="Microsoft.Playwright" Version="1.49.0" />
@@ -98,16 +98,25 @@
     <Delete Files="$(OutputPath)playwright.ps1" Condition="Exists('$(OutputPath)playwright.ps1')" />
   </Target>
 
+  <!-- EF Core Design copies MSBuild BuildHost DLLs; Jellyfin loads every DLL in the plugin folder and disables FinTV if these are present. -->
+  <Target Name="RemoveEfDesignBuildHostFromOutput" AfterTargets="Build">
+    <RemoveDir Directories="$(OutputPath)BuildHost-netcore" Condition="Exists('$(OutputPath)BuildHost-netcore')" />
+    <RemoveDir Directories="$(OutputPath)BuildHost-net472" Condition="Exists('$(OutputPath)BuildHost-net472')" />
+  </Target>
+
   <Target Name="ExcludePlaywrightDriverFromPublish" AfterTargets="ComputeFilesToPublish">
     <ItemGroup>
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(RelativePath)').StartsWith('.playwright'))" />
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(RelativePath)' == 'playwright.ps1'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(RelativePath)').StartsWith('BuildHost-'))" />
     </ItemGroup>
   </Target>
 
   <Target Name="RemovePlaywrightDriverFromPublishDir" AfterTargets="Publish">
     <RemoveDir Directories="$(PublishDir).playwright" Condition="Exists('$(PublishDir).playwright')" />
     <Delete Files="$(PublishDir)playwright.ps1" Condition="Exists('$(PublishDir)playwright.ps1')" />
+    <RemoveDir Directories="$(PublishDir)BuildHost-netcore" Condition="Exists('$(PublishDir)BuildHost-netcore')" />
+    <RemoveDir Directories="$(PublishDir)BuildHost-net472" Condition="Exists('$(PublishDir)BuildHost-net472')" />
   </Target>
 
 </Project>

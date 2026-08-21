@@ -81,7 +81,9 @@ public class IptvController : ControllerBase
         }
 
         Response.ContentType = "video/mp2t";
-        Response.Headers.CacheControl = "no-cache";
+        Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+        Response.Headers["X-Accel-Buffering"] = "no";
+        HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
         await _stream.StreamChannelAsync(id, Response.Body, cancellationToken);
     }
 

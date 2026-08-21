@@ -1,15 +1,21 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Jellyfin.Plugin.FinTV.Configuration;
-using Jellyfin.Plugin.FinTV.Domain;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.FinTV.Services;
 
 public class CommercialBrainzClient
 {
-    private static readonly JsonSerializerOptions JsonOptions = FinTvJson.Options;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<CommercialBrainzClient> _logger;
@@ -60,6 +66,31 @@ public class CommercialBrainzClient
         return await GetAsync<CommercialBrainzVideoDetail>(settings, url, cancellationToken);
     }
 
+    public async Task<byte[]?> GetYouTubeThumbnailAsync(string? youtubeId, CancellationToken cancellationToken = default)
+    {
+        if (!IsYouTubeId(youtubeId))
+        {
+            return null;
+        }
+
+        var id = youtubeId!.Trim();
+        foreach (var url in new[]
+        {
+            $"https://i.ytimg.com/vi/{id}/hqdefault.jpg",
+            $"https://i.ytimg.com/vi/{id}/mqdefault.jpg",
+            $"https://i.ytimg.com/vi/{id}/default.jpg"
+        })
+        {
+            var bytes = await TryGetBytesAsync(url, cancellationToken);
+            if (bytes is { Length: > 32 })
+            {
+                return bytes;
+            }
+        }
+
+        return null;
+    }
+
     public async Task<CommercialBrainzAdvertiserPage> SearchAdvertisersAsync(
         CommercialBrainzSettings settings,
         string query,
@@ -100,6 +131,39 @@ public class CommercialBrainzClient
         }
     }
 
+    private async Task<byte[]?> TryGetBytesAsync(string url, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(12));
+            var client = _httpClientFactory.CreateClient(nameof(CommercialBrainzClient));
+            using var response = await client.GetAsync(url, timeout.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadAsByteArrayAsync(timeout.Token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Thumbnail download failed for {Url}", url);
+            return null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    internal static bool IsYouTubeId(string? youtubeId)
+        => !string.IsNullOrWhiteSpace(youtubeId) && YouTubeIdRegex.IsMatch(youtubeId.Trim());
+
+    private static readonly Regex YouTubeIdRegex = new(
+        @"^[A-Za-z0-9_-]{6,20}$",
+        RegexOptions.Compiled);
+
     private static void ApplyAuth(HttpRequestMessage request, CommercialBrainzSettings settings)
     {
         if (string.IsNullOrWhiteSpace(settings.ApiToken))
@@ -111,12 +175,7 @@ public class CommercialBrainzClient
     }
 
     private static string NormalizeBaseUrl(string? baseUrl)
-    {
-        var value = string.IsNullOrWhiteSpace(baseUrl)
-            ? CommercialBrainzSettings.DefaultBaseUrl
-            : baseUrl.Trim().TrimEnd('/');
-        return value;
-    }
+        => CommercialBrainzSettings.NormalizeBaseUrl(baseUrl);
 }
 
 public class CommercialBrainzBrowsePage
@@ -132,6 +191,10 @@ public class CommercialBrainzBrowsePage
 
 public class CommercialBrainzVideoSummary
 {
+    private static readonly System.Text.RegularExpressions.Regex YearRegex = new(
+        @"\b((?:19|20)\d{2})\b",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
     public Guid Sbid { get; set; }
 
     public Guid CommercialId { get; set; }
@@ -139,6 +202,10 @@ public class CommercialBrainzVideoSummary
     public string? YoutubeId { get; set; }
 
     public string? YoutubeUrl { get; set; }
+
+    public string? ThumbnailUrl { get; set; }
+
+    public string? CommercialTitle { get; set; }
 
     public string? ChannelName { get; set; }
 
@@ -155,6 +222,178 @@ public class CommercialBrainzVideoSummary
     public CommercialBrainzAdvertiserSummary? Advertiser { get; set; }
 
     public List<string> Tags { get; set; } = new();
+
+    public string GetTitle()
+    {
+        if (!string.IsNullOrWhiteSpace(Commercial?.Title))
+        {
+            return Commercial.Title;
+        }
+
+        if (!string.IsNullOrWhiteSpace(CommercialTitle))
+        {
+            return CommercialTitle;
+        }
+
+        var youtubeTitle = GetMetadataString("youtube_title");
+        if (!string.IsNullOrWhiteSpace(youtubeTitle))
+        {
+            return youtubeTitle;
+        }
+
+        return Advertiser?.Name ?? ChannelName ?? YoutubeId ?? "Commercial";
+    }
+
+    public string? GetBrand() => Advertiser?.Name;
+
+    public string? GetYouTubeId()
+    {
+        if (!string.IsNullOrWhiteSpace(YoutubeId))
+        {
+            return YoutubeId.Trim();
+        }
+
+        var url = YoutubeUrl;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in query)
+            {
+                var pair = part.Split('=', 2);
+                if (pair.Length == 2 && pair[0].Equals("v", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Uri.UnescapeDataString(pair[1]);
+                }
+            }
+
+            if (uri.Host.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+            {
+                return uri.AbsolutePath.Trim('/');
+            }
+        }
+
+        return null;
+    }
+
+    public string? GetYouTubeUrl()
+    {
+        if (!string.IsNullOrWhiteSpace(YoutubeUrl))
+        {
+            return YoutubeUrl.Trim();
+        }
+
+        var id = GetYouTubeId();
+        return string.IsNullOrWhiteSpace(id) ? null : $"https://www.youtube.com/watch?v={id}";
+    }
+
+    public string? GetThumbnailUrl(string baseUrl)
+    {
+        var id = GetYouTubeId();
+        if (!string.IsNullOrWhiteSpace(id))
+        {
+            return $"https://i.ytimg.com/vi/{id}/hqdefault.jpg";
+        }
+
+        return ResolveMediaUrl(baseUrl, ThumbnailUrl)
+            ?? ResolveMediaUrl(baseUrl, GetMetadataString("youtube_thumbnail"));
+    }
+
+    public string GetCommercialPageUrl(string baseUrl)
+    {
+        var root = string.IsNullOrWhiteSpace(baseUrl)
+            ? CommercialBrainzSettings.DefaultBaseUrl
+            : baseUrl.Trim().TrimEnd('/');
+
+        if (CommercialId != Guid.Empty)
+        {
+            var page = $"{root}/commercial/{CommercialId:D}";
+            return Sbid == Guid.Empty ? page : $"{page}?video={Sbid:D}";
+        }
+
+        if (Sbid != Guid.Empty)
+        {
+            return $"{root}/video/{Sbid:D}";
+        }
+
+        return root;
+    }
+
+    public int? GetYear()
+    {
+        if (Commercial?.Year is int year && year >= 1900)
+        {
+            return year;
+        }
+
+        foreach (var candidate in new[] { Commercial?.Title, CommercialTitle, GetMetadataString("youtube_title") })
+        {
+            if (TryParseYear(candidate, out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        foreach (var tag in Tags)
+        {
+            if (TryParseYear(tag, out var parsed) && tag.Trim().Length == 4)
+            {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    public int GetDurationSeconds()
+        => Math.Max(1, (int)Math.Round((DurationMs ?? 30000) / 1000d));
+
+    private string? GetMetadataString(string key)
+    {
+        if (Metadata is null || !Metadata.TryGetValue(key, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+    }
+
+    private static bool TryParseYear(string? text, out int year)
+    {
+        year = 0;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var match = YearRegex.Match(text);
+        return match.Success && int.TryParse(match.Groups[1].Value, out year);
+    }
+
+    private static string? ResolveMediaUrl(string baseUrl, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        var value = url.Trim();
+        if (Uri.TryCreate(value, UriKind.Absolute, out _))
+        {
+            return value;
+        }
+
+        if (value.StartsWith('/'))
+        {
+            return $"{baseUrl.TrimEnd('/')}{value}";
+        }
+
+        return $"{baseUrl.TrimEnd('/')}/{value}";
+    }
 }
 
 public class CommercialBrainzVideoDetail : CommercialBrainzVideoSummary

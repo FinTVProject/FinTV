@@ -1,0 +1,17 @@
+name: Build Plugin
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet build Jellyfin.Plugin.FinTV/Jellyfin.Plugin.FinTV.csproj -c Release

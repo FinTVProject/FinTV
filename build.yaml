@@ -1,7 +1,7 @@
 ---
 name: "FinTV"
 guid: "f4e8a2b1-3c5d-4e6f-9a8b-7c6d5e4f3a2b"
-version: "0.0.2.110"
+version: "0.0.2.116"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 owner: "binarygeek119"
@@ -59,28 +59,37 @@ artifacts:
   - "logos/binarygeek119/Music Videos Channels/HeadPhone_Jack.png"
   - "logos/binarygeek119/Music Videos Channels/Rap-On-Tap.png"
   - "logos/binarygeek119/Music Videos Channels/The-Parody-Channel.png"
-  - "logos/binarygeek119/Shows/cops_and_robbers.png"
+  - "logos/binarygeek119/News/Past_Tense_News.png"
   - "logos/binarygeek119/Shows/FlashBack_TV.png"
   - "logos/binarygeek119/Shows/Flip_Television.png"
-  - "logos/binarygeek119/News/Past_Tense_News.png"
   - "logos/binarygeek119/Shows/GET_LEARNEDED.png"
   - "logos/binarygeek119/Shows/Retro_TV.png"
   - "logos/binarygeek119/Shows/Slappy.png"
-  - "logos/binarygeek119/Shows/winning.png"
   - "logos/binarygeek119/Shows/YouTube_TV.png"
   - "logos/binarygeek119/Shows/[open_swim].png"
-  - "logos/binarygeek119/The Holiday Channel/christmas-marry.png"
-  - "logos/binarygeek119/The Holiday Channel/easter.png"
-  - "logos/binarygeek119/The Holiday Channel/halloween_alt-happy.png"
+  - "logos/binarygeek119/Shows/cops_and_robbers.png"
+  - "logos/binarygeek119/Shows/winning.png"
   - "logos/binarygeek119/The Holiday Channel/October.png"
   - "logos/binarygeek119/The Holiday Channel/The Holiday Channel - Independence Day.png"
   - "logos/binarygeek119/The Holiday Channel/The Holiday Channel -Thanksgiving Day.png"
-  - "logos/binarygeek119/The Holiday Channel/The Holiday Channel-plane.png"
   - "logos/binarygeek119/The Holiday Channel/The Holiday Channel-Valentine's Day.png"
+  - "logos/binarygeek119/The Holiday Channel/The Holiday Channel-plane.png"
+  - "logos/binarygeek119/The Holiday Channel/christmas-marry.png"
+  - "logos/binarygeek119/The Holiday Channel/easter.png"
+  - "logos/binarygeek119/The Holiday Channel/halloween_alt-happy.png"
   - "logos/binarygeek119/Weather/WeatherStar3000.png"
   - "logos/binarygeek119/Weather/WeatherStar4000.png"
   - "scripts/install-docker-cli-jellyfin.sh"
 changelog: |-
+  - Recreate WeatherStar Docker sidecars that answer inside the container but not from Jellyfin, and share Jellyfin's network namespace
+  - Open CommercialBrainz preview cards on the CommercialBrainz commercial page, with a YouTube button on each card
+  - Whitelist managed assemblies in local plugin zips so Jellyfin does not load native e_sqlite3.dll and disable FinTV
+  - Preview CommercialBrainz matches with YouTube thumbnail cards instead of hanging on per-video detail fetches
+  - Draw FinTV checkboxes with a custom box so Jellyfin dashboard CSS cannot hide them
+  - Point CommercialBrainz at https://commercialbrainz.org and remap saved duckdns URLs
+  - Show CommercialBrainz Allow flags as visible checkboxes
+  - Preview CommercialBrainz commercials that will be synced, with YouTube thumbnails
+  - Fix WeatherStar 4000 Live TV stream stalling on network-idle wait and still-image encoding
   - Add weekly AI channel auto-tagging scheduled task (Sunday 2 AM) with Run Tagging Now and Full Library Retag on the AI tab
   - Use auto-tagged fintv-* Jellyfin tags for faster AI catalog loading during Generate All
   - Fix EBS background music library dropdown empty on Jellyfin 12

@@ -606,6 +606,7 @@
         $('modal-body').innerHTML = bodyHtml;
         $('modal-footer').innerHTML = footerHtml || '';
         $('modal-backdrop').classList.remove('hidden');
+        decorateCheckboxes();
     }
 
     function closeModal() {
@@ -1574,12 +1575,30 @@
             .filter((num) => Number.isFinite(num) && num >= 1900);
     }
 
-    const COMMERCIALBRAINZ_DEFAULT_URL = 'https://commercialbrainz.duckdns.org';
+    const COMMERCIALBRAINZ_DEFAULT_URL = 'https://commercialbrainz.org';
+
+    function normalizeBrainzBaseUrl(value) {
+        const trimmed = (value || '').trim().replace(/\/+$/, '');
+        if (!trimmed) {
+            return COMMERCIALBRAINZ_DEFAULT_URL;
+        }
+
+        try {
+            const host = new URL(trimmed).hostname;
+            if (host.toLowerCase() === 'commercialbrainz.duckdns.org') {
+                return COMMERCIALBRAINZ_DEFAULT_URL;
+            }
+        } catch {
+            return COMMERCIALBRAINZ_DEFAULT_URL;
+        }
+
+        return trimmed;
+    }
 
     function readBrainzSettingsFromForm() {
         return {
             enabled: !!$('cb-enabled')?.checked,
-            baseUrl: $('cb-base-url')?.value?.trim() || COMMERCIALBRAINZ_DEFAULT_URL,
+            baseUrl: normalizeBrainzBaseUrl($('cb-base-url')?.value),
             apiToken: $('cb-api-token')?.value?.trim() || '',
             poolMode: parseInt($('cb-pool-mode')?.value, 10) || 2,
             maxSyncResults: parseInt($('cb-max-sync')?.value, 10) || 500,
@@ -1608,7 +1627,7 @@
         settings = settings || {};
         if ($('cb-enabled')) $('cb-enabled').checked = !!settings.enabled;
         if ($('cb-base-url')) {
-            $('cb-base-url').value = settings.baseUrl || COMMERCIALBRAINZ_DEFAULT_URL;
+            $('cb-base-url').value = normalizeBrainzBaseUrl(settings.baseUrl);
         }
         if ($('cb-api-token')) $('cb-api-token').value = '';
         if ($('cb-pool-mode')) $('cb-pool-mode').value = String(settings.poolMode ?? 2);
@@ -1649,6 +1668,13 @@
         ].filter(Boolean).join('\n');
     }
 
+    function formatDuration(seconds) {
+        const total = Math.max(0, Number(seconds) || 0);
+        const mins = Math.floor(total / 60);
+        const secs = Math.floor(total % 60);
+        return `${mins}:${String(secs).padStart(2, '0')}`;
+    }
+
     function renderBrainzPreview(preview) {
         const el = $('brainz-preview');
         if (!el) return;
@@ -1656,14 +1682,50 @@
             el.innerHTML = '';
             return;
         }
+
         const samples = preview.samples || preview.Samples || [];
-        el.innerHTML = `<div class="preview-banner">${preview.matchedCount ?? preview.MatchedCount ?? 0} matches from ${preview.fetchedCount ?? preview.FetchedCount ?? 0} fetched videos</div>` +
-            (samples.length ? `<table class="data-table"><thead><tr><th>Title</th><th>Brand</th><th>Year</th><th>Network</th></tr></thead><tbody>${samples.map((item) => `<tr>
-                <td>${escapeHtml(item.title || item.Title || '')}</td>
-                <td>${escapeHtml(item.brand || item.Brand || '')}</td>
-                <td>${escapeHtml(String(item.year ?? item.Year ?? ''))}</td>
-                <td>${escapeHtml(item.network || item.Network || '')}</td>
-            </tr>`).join('')}</tbody></table>` : '<div class="empty-state">No preview samples.</div>');
+        const matched = preview.matchedCount ?? preview.MatchedCount ?? 0;
+        const fetched = preview.fetchedCount ?? preview.FetchedCount ?? 0;
+        const enabled = preview.enabled !== false && preview.Enabled !== false;
+        const shown = samples.length;
+        const extra = Math.max(0, matched - shown);
+        let banner = extra > 0
+            ? `Showing ${shown} of at least <strong>${matched}</strong> matching commercials (${fetched} scanned).`
+            : `Sync will pull <strong>${matched}</strong> commercial${matched === 1 ? '' : 's'} from ${fetched} scanned videos.`;
+        if (!enabled) {
+            banner += ' CommercialBrainz is currently disabled — enable it to sync these spots.';
+        }
+
+        if (!shown) {
+            el.innerHTML = `<div class="preview-banner">${banner}</div><div class="empty-state">No commercials match the current filters.</div>`;
+            return;
+        }
+
+        el.innerHTML = `<div class="preview-banner">${banner}</div>
+            <div class="brainz-preview-grid">${samples.map((item) => {
+                const title = item.title || item.Title || 'Commercial';
+                const brand = item.brand || item.Brand || '';
+                const year = item.year ?? item.Year;
+                const duration = formatDuration(item.durationSeconds ?? item.DurationSeconds);
+                const youtubeUrl = item.youtubeUrl || item.youTubeUrl || item.YouTubeUrl || '';
+                const youtubeId = item.youtubeVideoId || item.youTubeVideoId || item.YouTubeVideoId || '';
+                const pageUrl = item.commercialPageUrl || item.CommercialPageUrl || '';
+                const thumb = youtubeId
+                    ? resolveUrl('FinTV/api/commercials/brainz/thumbnail/' + encodeURIComponent(youtubeId))
+                    : (item.thumbnailUrl || item.ThumbnailUrl || '');
+                const meta = [brand, year, duration].filter((part) => part !== '' && part != null).join(' · ');
+                const thumbHtml = thumb
+                    ? `<img src="${escapeHtml(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+                    : '';
+                const pageInner = `<div class="thumb">${thumbHtml}</div><div class="body"><div class="title">${escapeHtml(title)}</div><div class="meta">${escapeHtml(meta)}</div></div>`;
+                const pageLink = pageUrl
+                    ? `<a class="brainz-preview-link" href="${escapeHtml(pageUrl)}" target="_blank" rel="noopener">${pageInner}</a>`
+                    : `<div class="brainz-preview-link">${pageInner}</div>`;
+                const youtubeBtn = youtubeUrl
+                    ? `<a class="brainz-yt-btn" href="${escapeHtml(youtubeUrl)}" target="_blank" rel="noopener">YouTube</a>`
+                    : '';
+                return `<div class="brainz-preview-card">${pageLink}${youtubeBtn}</div>`;
+            }).join('')}</div>`;
     }
 
     async function loadBrainzSettings() {
@@ -1676,7 +1738,7 @@
         }
     }
 
-    async function saveBrainzSettings() {
+    async function saveBrainzSettings(options = {}) {
         if (!syncConfigPage()) {
             toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
             return;
@@ -1689,17 +1751,27 @@
                 body: JSON.stringify(payload)
             });
             applyBrainzSettings(saved);
-            toast('CommercialBrainz filters saved.', 'success');
+            if (!options.silent) {
+                toast('CommercialBrainz filters saved.', 'success');
+            }
         } catch (err) {
             reportApiError(err, 'Could not save CommercialBrainz settings.');
         }
     }
 
-    async function previewBrainz() {
-        await saveBrainzSettings();
+    async function previewBrainz(options = {}) {
+        const el = $('brainz-preview');
+        if (!options.skipSave) {
+            await saveBrainzSettings({ silent: true });
+        }
+        if (el) {
+            el.innerHTML = '<div class="empty-state">Loading commercial preview…</div>';
+        }
         const preview = await api('/commercials/brainz/preview', { method: 'POST' });
         renderBrainzPreview(preview);
-        toast(`Preview: ${preview.matchedCount ?? preview.MatchedCount ?? 0} matches`, 'success');
+        if (!options.silent) {
+            toast(`Preview: ${preview.matchedCount ?? preview.MatchedCount ?? 0} commercials will be synced`, 'success');
+        }
     }
 
     async function syncBrainz() {
@@ -1707,6 +1779,10 @@
         await api('/commercials/brainz/sync', { method: 'POST' });
         toast('CommercialBrainz sync started.', 'success');
         await loadBrainzSettings();
+        const previewEl = $('brainz-preview');
+        if (previewEl) {
+            previewEl.dataset.loaded = '';
+        }
         await loadCommercials();
     }
 
@@ -1719,10 +1795,8 @@
 
             if (!list || !list.length) {
                 $('commercial-list').innerHTML = '<div class="empty-state">No commercials synced yet.</div>';
-                return;
-            }
-
-            $('commercial-list').innerHTML = `<table class="data-table">
+            } else {
+                $('commercial-list').innerHTML = `<table class="data-table">
                 <thead><tr><th>Source</th><th>Title</th><th>Brand</th><th>Duration</th><th>Year</th><th>Chapters</th></tr></thead>
                 <tbody>${list.map((c) => `<tr>
                     <td><span class="badge badge-type">${escapeHtml((c.source === 1 || c.source === 'CommercialBrainz') ? 'Brainz' : 'Jellyfin')}</span></td>
@@ -1732,6 +1806,18 @@
                     <td>${escapeHtml(String(c.year ?? ''))}</td>
                     <td>${(c.chapters || []).length}</td>
                 </tr>`).join('')}</tbody></table>`;
+            }
+
+            const previewEl = $('brainz-preview');
+            if (previewEl && previewEl.dataset.loaded !== '1') {
+                previewEl.dataset.loaded = '1';
+                try {
+                    await previewBrainz({ skipSave: true, silent: true });
+                } catch (previewErr) {
+                    previewEl.dataset.loaded = '';
+                    previewEl.innerHTML = `<div class="empty-state">${escapeHtml(previewErr.message || 'Could not load commercial preview.')}</div>`;
+                }
+            }
         } catch (err) {
             reportApiError(err, 'Could not load commercials.');
         }
@@ -3113,7 +3199,7 @@
                 : 'Jellyfin on host';
 
             const detailLine = info.running && !info.httpReachable && info.httpListeningInsideSidecar
-                ? '<div class="meta">WeatherStar responds inside the container but not from Jellyfin — stale network attachment is likely.</div>'
+                ? '<div class="meta">WeatherStar responds inside the container but not from Jellyfin. Click Stop, then Start so it can share Jellyfin&apos;s network.</div>'
                 : '';
 
             el.innerHTML = `<div>${escapeHtml(stateLine)}</div><div class="meta">${escapeHtml(info.containerName)} · ${escapeHtml(info.image)} · port ${info.hostPort} · ${escapeHtml(networkLine)}${usingLocal ? ' · active URL' : ''}</div>${detailLine}`;
@@ -3685,7 +3771,7 @@
 
         const body = `
             <label class="field"><span>Name</span><input id="sp-name" class="emby-input" value="${escapeHtml(draft.name || '')}"></label>
-            <label class="field checkbox-field"><input id="sp-enabled" type="checkbox"${draft.enabled !== false ? ' checked' : ''}><span>Enabled</span></label>
+            <label class="field checkbox-field"><input id="sp-enabled" type="checkbox"${draft.enabled !== false ? ' checked' : ''}><span class="fintv-check-box" aria-hidden="true"></span><span>Enabled</span></label>
             <label class="field"><span>Day of week</span>
                 <select id="sp-day" class="emby-select">${DAYS.map((d, i) =>
                     `<option value="${i}"${draft.dayOfWeek === i ? ' selected' : ''}>${d}</option>`).join('')}</select></label>
@@ -3897,10 +3983,30 @@
             || candidate.classList.contains('mainAnimatedPage');
     }
 
+    function decorateCheckboxes() {
+        qa('.checkbox-field').forEach((label) => {
+            if (label.querySelector('.fintv-check-box')) {
+                return;
+            }
+
+            const input = label.querySelector('input[type="checkbox"]');
+            if (!input) {
+                return;
+            }
+
+            const box = document.createElement('span');
+            box.className = 'fintv-check-box';
+            box.setAttribute('aria-hidden', 'true');
+            input.insertAdjacentElement('afterend', box);
+        });
+    }
+
     function bindEvents() {
         if (!configPage) {
             return;
         }
+
+        decorateCheckboxes();
 
         function click(id, handler) {
             const el = $(id);

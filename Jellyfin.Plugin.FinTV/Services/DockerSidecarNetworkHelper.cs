@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using CliWrap;
 using CliWrap.Buffered;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,18 @@ namespace Jellyfin.Plugin.FinTV.Services;
 /// </summary>
 public static class DockerSidecarNetworkHelper
 {
+    private static readonly Regex DockerCgroupIdRegex = new(
+        @"(?:docker-|/docker/)([0-9a-f]{64})",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex ShortContainerIdRegex = new(
+        @"^[0-9a-f]{12,64}$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     public static bool RunsInsideDocker() => File.Exists("/.dockerenv");
+
+    public static bool UsesExplicitDockerNetwork()
+        => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FINTV_DOCKER_NETWORK"));
 
     public static async Task<DockerSidecarNetworkResolution> ResolveSidecarNetworkAsync(
         ILogger logger,
@@ -33,6 +45,9 @@ public static class DockerSidecarNetworkHelper
         var containerRef = await ResolveJellyfinContainerRefAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(containerRef))
         {
+            logger.LogWarning(
+                "Jellyfin is running in Docker but its container name could not be resolved. "
+                + "Set FINTV_JELLYFIN_CONTAINER (for example Jellyfin on Unraid) so WeatherStar and Playwright can share loopback.");
             return new DockerSidecarNetworkResolution();
         }
 
@@ -56,32 +71,21 @@ public static class DockerSidecarNetworkHelper
             return containerRef.Trim();
         }
 
-        if (!File.Exists("/etc/hostname"))
+        if (!RunsInsideDocker())
         {
             return null;
         }
 
-        var hostname = (await File.ReadAllTextAsync("/etc/hostname", cancellationToken)).Trim();
-        if (string.IsNullOrWhiteSpace(hostname))
+        foreach (var candidate in await EnumerateSelfContainerRefsAsync(cancellationToken))
         {
-            return null;
-        }
-
-        var nameResult = await Cli.Wrap("docker")
-            .WithArguments(["inspect", "-f", "{{.Name}}", hostname])
-            .WithValidation(CommandResultValidation.None)
-            .ExecuteBufferedAsync(cancellationToken);
-
-        if (nameResult.ExitCode == 0)
-        {
-            var name = nameResult.StandardOutput.Trim().TrimStart('/');
+            var name = await InspectContainerNameAsync(candidate, cancellationToken);
             if (!string.IsNullOrWhiteSpace(name))
             {
                 return name;
             }
         }
 
-        return hostname;
+        return null;
     }
 
     public static async Task<string?> GetSidecarNetworkParentRefAsync(
@@ -114,13 +118,24 @@ public static class DockerSidecarNetworkHelper
         string? sidecarNetworkParent,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(jellyfinContainerRef)
-            || string.IsNullOrWhiteSpace(sidecarNetworkParent))
+        if (UsesExplicitDockerNetwork() || !RunsInsideDocker())
         {
             return false;
         }
 
-        var expectedId = await ResolveContainerIdAsync(jellyfinContainerRef, cancellationToken);
+        var expectedRef = jellyfinContainerRef ?? await ResolveJellyfinContainerRefAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(expectedRef))
+        {
+            return false;
+        }
+
+        // Port-published sidecar on a bridge network cannot be reached on Jellyfin loopback.
+        if (string.IsNullOrWhiteSpace(sidecarNetworkParent))
+        {
+            return true;
+        }
+
+        var expectedId = await ResolveContainerIdAsync(expectedRef, cancellationToken);
         var parentId = await ResolveContainerIdAsync(sidecarNetworkParent, cancellationToken);
         if (string.IsNullOrWhiteSpace(expectedId))
         {
@@ -151,6 +166,75 @@ public static class DockerSidecarNetworkHelper
 
         var id = result.StandardOutput.Trim();
         return string.IsNullOrWhiteSpace(id) ? null : id;
+    }
+
+    private static async Task<List<string>> EnumerateSelfContainerRefsAsync(CancellationToken cancellationToken)
+    {
+        var candidates = new List<string>();
+
+        if (File.Exists("/etc/hostname"))
+        {
+            var hostname = (await File.ReadAllTextAsync("/etc/hostname", cancellationToken)).Trim();
+            if (!string.IsNullOrWhiteSpace(hostname))
+            {
+                candidates.Add(hostname);
+            }
+        }
+
+        var cgroupId = TryReadContainerIdFromCgroup();
+        if (!string.IsNullOrWhiteSpace(cgroupId))
+        {
+            candidates.Add(cgroupId);
+            if (cgroupId.Length > 12)
+            {
+                candidates.Add(cgroupId[..12]);
+            }
+        }
+
+        return candidates.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static string? TryReadContainerIdFromCgroup()
+    {
+        foreach (var path in new[] { "/proc/self/cgroup", "/proc/1/cgroup", "/proc/self/mountinfo" })
+        {
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                var text = File.ReadAllText(path);
+                var match = DockerCgroupIdRegex.Match(text);
+                if (match.Success)
+                {
+                    return match.Groups[1].Value;
+                }
+            }
+            catch (IOException)
+            {
+                // Ignore unreadable proc files.
+            }
+        }
+
+        return null;
+    }
+
+    private static async Task<string?> InspectContainerNameAsync(string containerRef, CancellationToken cancellationToken)
+    {
+        var nameResult = await Cli.Wrap("docker")
+            .WithArguments(["inspect", "-f", "{{.Name}}", containerRef])
+            .WithValidation(CommandResultValidation.None)
+            .ExecuteBufferedAsync(cancellationToken);
+
+        if (nameResult.ExitCode != 0)
+        {
+            return ShortContainerIdRegex.IsMatch(containerRef) ? containerRef : null;
+        }
+
+        var name = nameResult.StandardOutput.Trim().TrimStart('/');
+        return string.IsNullOrWhiteSpace(name) ? null : name;
     }
 }
 
