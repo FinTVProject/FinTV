@@ -8,7 +8,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/FinTVProject/FinTV</Support>
   <Project>https://github.com/FinTVProject/FinTV</Project>
-  <Overview>FinTV Server — simulated live TV channels, EPG, commercials, WeatherStar, and news for Jellyfin. Pair with the FinTV plugin and a PostgreSQL container on the same Docker network.</Overview>
+  <Overview>FinTV Server — simulated live TV channels, EPG, commercials, WeatherStar, and news for Jellyfin. Pair with the FinTV plugin. Point POSTGRES_* at your existing PostgreSQL instance on the same Docker network.</Overview>
   <Category>MediaApp:Video</Category>
   <WebUI>http://[IP]:[PORT:8097]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/FinTVProject/FinTV/master/unraid/fintv-server.xml</TemplateURL>
