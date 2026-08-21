@@ -8,7 +8,7 @@ namespace FinTv.Domain;
 public class FilterDefinition
 {
     /// <summary>
-    /// FinTV preset identifier (e.g. fintv-retro). Used for channel rules, not Jellyfin tag queries.
+    /// Preset identifier (e.g. fintv-retro). Used for channel rules, not Jellyfin tag queries.
     /// </summary>
     public string? PresetId { get; set; }
 
@@ -65,7 +65,7 @@ public class FilterDefinition
     }
 
     /// <summary>
-    /// Optional Jellyfin tags from filter JSON (excludes FinTV preset identifiers).
+    /// Optional Jellyfin tags from filter JSON (excludes leftover fintv-* preset identifiers).
     /// </summary>
     public static IReadOnlyList<string> GetOptionalJellyfinTags(string? filterJson)
     {

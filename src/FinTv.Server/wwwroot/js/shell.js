@@ -19,11 +19,11 @@
     };
 
     const subtitles = {
-        guide: 'What\'s on now across FinTV channels',
+        guide: 'What\'s on now across ChannelFlow-Server channels',
         channels: 'Manage Live TV channels',
         presets: 'Create the Binarygeek119 ready-made lineup',
         lineups: 'Edit 24-hour schedules and playout',
-        list: 'Register Jellyfin playlists as FinTV lists',
+        list: 'Register Jellyfin playlists as ChannelFlow lists',
         jellyfin: 'Choose which Jellyfin libraries to sync from',
         special: 'Recurring blocks that override the normal lineup',
         commercials: 'Jellyfin commercial library and blackframe scan',
@@ -33,7 +33,7 @@
         ai: 'AI lineup generation and tagging',
         weather: 'WeatherStar live channels',
         news: 'Live RSS news channel',
-        general: 'Server-wide FinTV settings',
+        general: 'Server-wide ChannelFlow-Server settings',
         tasks: 'Rebuild playouts and maintenance'
     };
 
@@ -111,8 +111,8 @@
         document.getElementById('auth-title').textContent = needsSetup ? 'Create admin' : 'Sign in';
         document.getElementById('login-submit').textContent = needsSetup ? 'Create account' : 'Sign in';
         document.getElementById('auth-subtitle').textContent = needsSetup
-            ? 'First launch — choose a username and password for FinTV Server'
-            : 'FinTV Server';
+            ? 'First launch — choose a username and password for ChannelFlow-Server'
+            : 'ChannelFlow-Server';
         const confirmField = document.getElementById('login-pass-confirm-field');
         const confirmInput = document.getElementById('login-pass-confirm');
         const passInput = document.getElementById('login-pass');
@@ -129,7 +129,7 @@
         if (path === '/' || path === '/index.html') {
             history.replaceState({}, '', '/login');
         }
-        document.title = (needsSetup ? 'Create admin' : 'Sign in') + ' · FinTV';
+        document.title = (needsSetup ? 'Create admin' : 'Sign in') + ' · ChannelFlow-Server';
     }
 
     function showApp(userName) {
@@ -174,7 +174,7 @@
         card.className = 'section-card';
         card.id = 'path-map-card';
         card.innerHTML = '<div class="section-header"><h3>Library path remaps</h3></div>' +
-            '<p class="muted">Jellyfin path prefix → local FinTV mount prefix</p>' +
+            '<p class="muted">Jellyfin path prefix → local ChannelFlow-Server mount prefix</p>' +
             '<textarea id="path-mappings" rows="6" placeholder="/data/media = /media"></textarea>' +
             '<div class="toolbar"><button type="button" id="btn-save-paths" class="raised button-submit">Save remaps</button>' +
             '<button type="button" id="btn-test-paths" class="raised">Test remaps</button></div>' +

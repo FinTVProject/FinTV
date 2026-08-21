@@ -1000,7 +1000,7 @@
         e.preventDefault();
         syncConfigPageFromEvent(e);
         if (!configPage) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow-Server is not ready. Reload the page.', 'error');
             return;
         }
 
@@ -1113,14 +1113,13 @@
             .filter((item) => item && !/^fintv-/i.test(item) && item !== tag);
         if (tag) {
             filter.presetId = tag;
-            filter.tags = [tag].concat(otherTags);
         } else {
             delete filter.presetId;
-            if (otherTags.length) {
-                filter.tags = otherTags;
-            } else {
-                delete filter.tags;
-            }
+        }
+        if (otherTags.length) {
+            filter.tags = otherTags;
+        } else {
+            delete filter.tags;
         }
 
         return Object.keys(filter).length ? JSON.stringify(filter) : null;
@@ -1277,7 +1276,7 @@
 
         fillDeepChannelForm(channel);
         setDeepEditorVisible(true);
-        document.title = 'Edit ' + channel.name + ' · FinTV';
+        document.title = 'Edit ' + channel.name + ' · ChannelFlow-Server';
         window.dispatchEvent(new CustomEvent('fintv-tabchange', {
             detail: {
                 tab: 'channels',
@@ -1644,7 +1643,7 @@
                     <option value="0">Jellyfin item</option>
                     <option value="1">Collection name</option>
                     <option value="2">Filter JSON</option>
-                    <option value="3">FinTV list</option>
+                    <option value="3">ChannelFlow list</option>
                 </select>
             </div>
             <div id="slot-add-panel"></div>`;
@@ -1687,7 +1686,7 @@
                 };
             } else if (kind === 3) {
                 ensureFinTvLists().then((lists) => {
-                    panel.innerHTML = `<label class="field"><span>FinTV list</span>
+                    panel.innerHTML = `<label class="field"><span>ChannelFlow list</span>
                         <select id="slot-list-id" class="emby-select">
                             ${lists.map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('')}
                         </select></label>
@@ -2099,7 +2098,7 @@
 
     async function saveBrainzSettings(options = {}) {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow-Server is not ready. Reload the page.', 'error');
             return;
         }
 
@@ -2661,7 +2660,7 @@
 
     async function applyPresets() {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow-Server is not ready. Reload the page.', 'error');
             return;
         }
 
@@ -2827,8 +2826,6 @@
         if ($('ai-auto-apply-all-on-save')) $('ai-auto-apply-all-on-save').disabled = !enabled;
         if ($('btn-weather-guide-cache-generate')) $('btn-weather-guide-cache-generate').disabled = !enabled;
         if ($('btn-weather-guide-cache-clear')) $('btn-weather-guide-cache-clear').disabled = !enabled;
-        if ($('btn-channel-tagging-run')) $('btn-channel-tagging-run').disabled = !enabled;
-        if ($('btn-channel-tagging-full')) $('btn-channel-tagging-full').disabled = !enabled;
     }
 
     function readAiSettingsFromForm() {
@@ -2836,8 +2833,6 @@
             enabled: !!$('ai-enabled')?.checked,
             autoApplyOnChannelAdd: !!$('ai-auto-apply-channel-add')?.checked,
             autoApplyToAllChannelsOnSave: !!$('ai-auto-apply-all-on-save')?.checked,
-            autoTagChannelsWeekly: !!$('ai-auto-tag-weekly')?.checked,
-            useAutoTaggedCatalog: !!$('ai-use-auto-tagged-catalog')?.checked,
             defaultProvider: Number($('ai-default-provider')?.value || '0'),
             openAiModel: $('ai-openai-model')?.value?.trim() || 'gpt-4o-mini',
             veniceModel: $('ai-venice-model')?.value?.trim() || 'gpt-4o-mini',
@@ -2856,8 +2851,6 @@
             if ($('ai-enabled')) $('ai-enabled').checked = !!aiSettings.enabled;
             if ($('ai-auto-apply-channel-add')) $('ai-auto-apply-channel-add').checked = !!aiSettings.autoApplyOnChannelAdd;
             if ($('ai-auto-apply-all-on-save')) $('ai-auto-apply-all-on-save').checked = !!aiSettings.autoApplyToAllChannelsOnSave;
-            if ($('ai-auto-tag-weekly')) $('ai-auto-tag-weekly').checked = !!aiSettings.autoTagChannelsWeekly;
-            if ($('ai-use-auto-tagged-catalog')) $('ai-use-auto-tagged-catalog').checked = aiSettings.useAutoTaggedCatalog !== false;
             if ($('ai-default-provider')) $('ai-default-provider').value = String(aiSettings.defaultProvider ?? 0);
             if ($('ai-openai-model')) $('ai-openai-model').value = aiSettings.openAiModel || 'gpt-4o-mini';
             if ($('ai-venice-model')) $('ai-venice-model').value = aiSettings.veniceModel || 'gpt-4o-mini';
@@ -2877,143 +2870,8 @@
                 startGenerateAllPolling();
             }
             await loadWeatherGuideCacheStatus();
-            await loadChannelTaggingStatus();
         } catch (err) {
             reportApiError(err, 'Could not load AI settings.');
-        }
-    }
-
-    let channelTaggingPollTimer = null;
-
-    function renderChannelTaggingStatus(status) {
-        const el = $('ai-channel-tagging-status');
-        const runBtn = $('btn-channel-tagging-run');
-        const fullBtn = $('btn-channel-tagging-full');
-        if (!el || !status) {
-            return;
-        }
-
-        if (status.isRunning) {
-            el.textContent =
-                `Tagging library… ${status.processedItems}/${status.totalItems} processed · ${status.taggedItems} updated · ${status.skippedItems} unchanged · ${status.taggableChannelCount} channel tag(s).`;
-            if (runBtn) {
-                runBtn.disabled = true;
-                runBtn.textContent = 'Tagging…';
-            }
-            if (fullBtn) {
-                fullBtn.disabled = true;
-            }
-            return;
-        }
-
-        if (runBtn) {
-            runBtn.disabled = !($('ai-enabled')?.checked);
-            runBtn.textContent = 'Run Tagging Now';
-        }
-        if (fullBtn) {
-            fullBtn.disabled = !($('ai-enabled')?.checked);
-        }
-
-        if (status.lastError) {
-            el.textContent =
-                `Last run failed: ${status.lastError}` +
-                (status.lastCompletedAt ? ` · previous success ${new Date(status.lastCompletedAt).toLocaleString()}` : '');
-            return;
-        }
-
-        if (status.lastCompletedAt) {
-            el.textContent =
-                `Last run ${new Date(status.lastCompletedAt).toLocaleString()}: ${status.taggedItems} item(s) updated, ${status.skippedItems} unchanged` +
-                (status.autoTagChannelsWeekly ? ' · weekly task enabled' : '') +
-                (status.useAutoTaggedCatalog ? ' · catalog tag queries enabled' : ' · catalog tag queries disabled') +
-                `.`;
-            return;
-        }
-
-        el.textContent =
-            `No tagging run yet. ${status.taggableChannelCount} channel tag(s) available.` +
-            (status.autoTagChannelsWeekly ? ' Weekly task is enabled.' : ' Enable weekly auto-tagging or click Run Tagging Now.');
-    }
-
-    async function loadChannelTaggingStatus() {
-        if (!syncConfigPage()) {
-            return;
-        }
-
-        try {
-            const status = await api('/ai/channel-tagging/status');
-            renderChannelTaggingStatus(status);
-            if (status.isRunning) {
-                startChannelTaggingPolling();
-            } else {
-                stopChannelTaggingPolling();
-            }
-        } catch (err) {
-            const el = $('ai-channel-tagging-status');
-            if (el) {
-                el.textContent = 'Could not load channel tagging status.';
-            }
-        }
-    }
-
-    function startChannelTaggingPolling() {
-        if (channelTaggingPollTimer) {
-            return;
-        }
-
-        channelTaggingPollTimer = setInterval(() => {
-            loadChannelTaggingStatus().catch(() => {});
-        }, 3000);
-    }
-
-    function stopChannelTaggingPolling() {
-        if (!channelTaggingPollTimer) {
-            return;
-        }
-
-        clearInterval(channelTaggingPollTimer);
-        channelTaggingPollTimer = null;
-    }
-
-    async function runChannelTagging(fullRetag) {
-        if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
-            return;
-        }
-
-        if (!($('ai-enabled')?.checked)) {
-            toast('Enable AI lineup generation first.', 'error');
-            return;
-        }
-
-        const btn = fullRetag ? $('btn-channel-tagging-full') : $('btn-channel-tagging-run');
-        const originalLabel = btn ? btn.textContent : '';
-        try {
-            if (btn) {
-                btn.disabled = true;
-                btn.textContent = fullRetag ? 'Starting full retag…' : 'Starting…';
-            }
-
-            const response = await api('/ai/channel-tagging/run', {
-                method: 'POST',
-                body: JSON.stringify({ fullRetag: !!fullRetag })
-            });
-
-            if (response.alreadyRunning) {
-                toast('Channel tagging is already running.', 'info');
-            } else {
-                toast(fullRetag ? 'Full library retag started.' : 'Channel tagging started.', 'success');
-            }
-
-            renderChannelTaggingStatus(response.status || response);
-            startChannelTaggingPolling();
-        } catch (err) {
-            reportApiError(err, 'Could not start channel tagging.');
-        } finally {
-            if (btn && !channelTaggingPollTimer) {
-                btn.disabled = !($('ai-enabled')?.checked);
-                btn.textContent = originalLabel;
-            }
         }
     }
 
@@ -3353,7 +3211,7 @@
 
     async function saveAiSettings() {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow-Server is not ready. Reload the page.', 'error');
             return;
         }
 
@@ -3370,8 +3228,6 @@
                 enabled: form.enabled,
                 autoApplyOnChannelAdd: form.autoApplyOnChannelAdd,
                 autoApplyToAllChannelsOnSave: form.autoApplyToAllChannelsOnSave,
-                autoTagChannelsWeekly: form.autoTagChannelsWeekly,
-                useAutoTaggedCatalog: form.useAutoTaggedCatalog,
                 defaultProvider: form.defaultProvider,
                 openAiModel: form.openAiModel,
                 veniceModel: form.veniceModel
@@ -3420,7 +3276,7 @@
 
     async function testAiConnection() {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow-Server is not ready. Reload the page.', 'error');
             return;
         }
 
@@ -3454,7 +3310,7 @@
 
     async function saveAiChannelSettings(channelId) {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow-Server is not ready. Reload the page.', 'error');
             return;
         }
 
@@ -3500,7 +3356,7 @@
 
     async function generateAiLineup(channelId) {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow-Server is not ready. Reload the page.', 'error');
             return;
         }
 
@@ -3886,7 +3742,7 @@
                 api('/news/settings'),
                 api('/news/feeds')
             ]);
-            if ($('news-header')) $('news-header').value = settings.headerText || 'FinTV News';
+            if ($('news-header')) $('news-header').value = settings.headerText || 'ChannelFlow News';
             if ($('news-count')) $('news-count').value = settings.articleCount || 8;
             if ($('news-refresh')) $('news-refresh').value = settings.refreshMinutes || 10;
             if ($('news-intro')) $('news-intro').value = settings.introText || '';
@@ -3967,7 +3823,7 @@
         await api('/news/settings', {
             method: 'PUT',
             body: JSON.stringify({
-                headerText: $('news-header')?.value.trim() || 'FinTV News',
+                headerText: $('news-header')?.value.trim() || 'ChannelFlow News',
                 articleCount: Number($('news-count')?.value || 8),
                 refreshMinutes: Number($('news-refresh')?.value || 10),
                 ttsEnabled: !!$('news-tts')?.checked,
@@ -4225,7 +4081,7 @@
 
     async function saveGeneralSettings() {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow-Server is not ready. Reload the page.', 'error');
             return;
         }
 
@@ -4319,7 +4175,7 @@
             await ensureFinTvLists(true);
             renderListsTable();
         } catch (err) {
-            reportApiError(err, 'Could not load FinTV lists.');
+            reportApiError(err, 'Could not load ChannelFlow lists.');
         }
     }
 
@@ -4455,7 +4311,7 @@
     function renderListsTable() {
         const el = $('lists-table');
         if (!finTvLists.length) {
-            el.innerHTML = '<div class="empty-state">No FinTV lists registered yet. Add a Jellyfin playlist to use it in lineups.</div>';
+            el.innerHTML = '<div class="empty-state">No ChannelFlow lists registered yet. Add a Jellyfin playlist to use it in lineups.</div>';
             return;
         }
 
@@ -4512,7 +4368,7 @@
                    <option value="1">Random</option>
                  </select></label>`;
 
-        openModal(existing ? 'Edit FinTV List' : 'Add FinTV List', body, `
+        openModal(existing ? 'Edit ChannelFlow List' : 'Add ChannelFlow List', body, `
             <button type="button" class="emby-button" id="list-cancel">Cancel</button>
             <button type="button" class="raised button-submit emby-button" id="list-save">Save</button>`);
 
@@ -4548,7 +4404,7 @@
     }
 
     async function deleteList(id) {
-        if (!confirm('Remove this FinTV list registration?')) return;
+        if (!confirm('Remove this ChannelFlow list registration?')) return;
         try {
             await api('/lists/' + id, { method: 'DELETE' });
             toast('List removed.', 'success');
@@ -4673,7 +4529,7 @@
                 <select id="sp-content-mode" class="emby-select">
                     <option value="0">Fixed items</option>
                     <option value="1">Rule-based</option>
-                    <option value="2">FinTV list</option>
+                    <option value="2">ChannelFlow list</option>
                 </select></label>
             <div id="sp-content-panel"></div>`;
 
@@ -4706,7 +4562,7 @@
             }
 
             if (mode === 2) {
-                panel.innerHTML = `<label class="field"><span>FinTV list</span>
+                panel.innerHTML = `<label class="field"><span>ChannelFlow list</span>
                     <select id="sp-list-id" class="emby-select">
                         ${finTvLists.map((l) => `<option value="${l.id}"${draft.candidates[0]?.finTvListId === l.id ? ' selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
                     </select></label>`;
@@ -4767,7 +4623,7 @@
             } else if (mode === 2) {
                 const listId = document.getElementById('sp-list-id').value;
                 if (!listId) {
-                    toast('Select a FinTV list.', 'error');
+                    toast('Select a ChannelFlow list.', 'error');
                     return;
                 }
                 candidates = [{ kind: 3, finTvListId: listId, weight: 1, sortOrder: 0 }];
@@ -5105,11 +4961,11 @@
     };
 
     const TAB_SUBTITLES = {
-        guide: 'What\'s on now across FinTV channels',
+        guide: 'What\'s on now across ChannelFlow-Server channels',
         channels: 'Manage Live TV channels',
         presets: 'Create the Binarygeek119 ready-made lineup',
         lineups: 'Edit 24-hour schedules and playout',
-        list: 'Register Jellyfin playlists as FinTV lists',
+        list: 'Register Jellyfin playlists as ChannelFlow lists',
         jellyfin: 'Choose which Jellyfin libraries to sync from',
         special: 'Recurring blocks that override the normal lineup',
         commercials: 'Jellyfin commercial library and blackframe scan',
@@ -5119,7 +4975,7 @@
         ai: 'AI lineup generation and tagging',
         weather: 'WeatherStar live channels',
         news: 'Live RSS news channel',
-        general: 'Server-wide FinTV settings',
+        general: 'Server-wide ChannelFlow-Server settings',
         tasks: 'Rebuild playouts and maintenance'
     };
 
@@ -5252,7 +5108,7 @@
             history.pushState({ tab: name }, '', path);
         }
 
-        document.title = (TAB_TITLES[name] || name) + ' · FinTV';
+        document.title = (TAB_TITLES[name] || name) + ' · ChannelFlow-Server';
         window.dispatchEvent(new CustomEvent('fintv-tabchange', {
             detail: { tab: name, title: TAB_TITLES[name], subtitle: TAB_SUBTITLES[name] }
         }));
@@ -5402,11 +5258,6 @@
         click('btn-ai-cancel-generate-all', () => cancelGenerateAll().catch((e) => toast(e.message, 'error')));
         click('btn-weather-guide-cache-generate', () => generateWeatherGuideCache().catch((e) => toast(e.message, 'error')));
         click('btn-weather-guide-cache-clear', () => clearWeatherGuideCache().catch((e) => toast(e.message, 'error')));
-        click('btn-channel-tagging-run', () => runChannelTagging(false).catch((e) => toast(e.message, 'error')));
-        click('btn-channel-tagging-full', () => {
-            if (!confirm('Retag the entire library? This re-evaluates every movie, series, and music video.')) return;
-            runChannelTagging(true).catch((e) => toast(e.message, 'error'));
-        });
         click('btn-ai-apply', () => applyAiLineup().catch((e) => toast(e.message, 'error')));
         click('btn-ai-discard', discardAiPreview);
         change('ai-enabled', updateAiUiState);
@@ -5452,7 +5303,7 @@
             if (editorId) {
                 return openDeepChannelEditor(editorId, { fromRoute: true });
             }
-        }).catch((err) => reportApiError(err, 'Could not load FinTV admin.'));
+        }).catch((err) => reportApiError(err, 'Could not load ChannelFlow-Server admin.'));
     }
 
     function resolveConfigPage(preferred) {

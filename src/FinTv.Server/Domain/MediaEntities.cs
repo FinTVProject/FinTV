@@ -146,7 +146,7 @@ public class NewsSettings
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    public string HeaderText { get; set; } = "FinTV News";
+    public string HeaderText { get; set; } = "ChannelFlow News";
 
     public int ArticleCount { get; set; } = 8;
 

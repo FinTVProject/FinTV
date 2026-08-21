@@ -47,7 +47,7 @@ public static class NewsAssBuilder
 
         return $"""
             [Script Info]
-            Title: FinTV News
+            Title: ChannelFlow News
             ScriptType: v4.00+
             WrapStyle: 0
             PlayResX: {playX}

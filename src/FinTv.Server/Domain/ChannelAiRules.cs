@@ -437,35 +437,6 @@ public static class ChannelAiRules
         => string.Equals(libraryTag, "fintv-news", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Library tags excluded from weekly auto-tagging (library-scoped, news, or non-library channels).
-    /// </summary>
-    public static bool IsExcludedFromAutoTagging(string? libraryTag)
-    {
-        if (string.IsNullOrWhiteSpace(libraryTag))
-        {
-            return true;
-        }
-
-        if (IsExcludedFromAi(libraryTag))
-        {
-            return true;
-        }
-
-        if (GetLibraryConstraints(libraryTag) is not null)
-        {
-            return true;
-        }
-
-        return !Rules.ContainsKey(libraryTag);
-    }
-
-    /// <summary>
-    /// Preset library tags that auto-tagging may write onto Jellyfin items.
-    /// </summary>
-    public static IReadOnlyList<string> GetAutoTaggableChannelTags()
-        => Rules.Keys.Where(tag => !IsExcludedFromAutoTagging(tag)).OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase).ToList();
-
-    /// <summary>
     /// Optional max official rating from a preset filter (for example OpenSwim TV-PG).
     /// </summary>
     public static string? GetPresetMaxRating(string? libraryTag)

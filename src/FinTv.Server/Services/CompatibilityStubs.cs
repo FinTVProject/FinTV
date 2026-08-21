@@ -1,5 +1,4 @@
 using FinTv.Configuration;
-using FinTv.Domain;
 
 namespace FinTv.Services;
 
@@ -15,25 +14,6 @@ public sealed class BlackframeChapterTask
         state.LastError = "Blackframe scan runs in the FinTV Jellyfin plugin.";
         FinTvRuntime.Current?.SaveConfiguration();
         progress.Report(100);
-        return Task.CompletedTask;
-    }
-}
-
-/// <summary>
-/// Library tagging stays in the Jellyfin plugin (needs ILibraryManager write access).
-/// </summary>
-public sealed class FinTvChannelTaggingService
-{
-    public Task RunAsync(bool fullRetag, IProgress<double>? progress, CancellationToken cancellationToken)
-    {
-        _ = fullRetag;
-        _ = progress;
-        _ = cancellationToken;
-        var state = FinTvRuntime.Current?.Configuration.ChannelAutoTaggingTaskState ?? new ChannelAutoTaggingTaskState();
-        state.IsRunning = false;
-        state.LastError = "Channel auto-tagging runs in the FinTV Jellyfin plugin.";
-        state.LastCompletedAt = DateTime.UtcNow;
-        FinTvRuntime.Current?.SaveConfiguration();
         return Task.CompletedTask;
     }
 }

@@ -49,7 +49,7 @@ public class WeatherStarChannelService
     public async Task StreamAsync(Domain.Channel channel, Stream output, CancellationToken cancellationToken)
     {
         _logger.LogInformation(
-            "WeatherStar capture in the Jellyfin plugin is retired. Tune weather through FinTV Server IPTV for the native compositor.");
+            "WeatherStar capture in the Jellyfin plugin is retired. Tune weather through ChannelFlow-Server IPTV for the native compositor.");
         await WriteEbsFallbackAsync(channel, _mediaEncoder.EncoderPath, output, cancellationToken);
     }
 

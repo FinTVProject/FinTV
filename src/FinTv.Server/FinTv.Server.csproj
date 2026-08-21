@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>FinTv</RootNamespace>
     <AssemblyName>FinTv.Server</AssemblyName>
+    <Product>ChannelFlow-Server</Product>
+    <AssemblyTitle>ChannelFlow-Server</AssemblyTitle>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
@@ -26,6 +28,10 @@
     <None Include="..\..\vendor\ws3kp\server\fonts\*.ttf" Link="weatherstar\ws3kp\fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\vendor\ws3kp\server\fonts')" />
     <None Include="..\..\vendor\ws3kp\server\images\backgrounds\*" Link="weatherstar\ws3kp\images\backgrounds\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\vendor\ws3kp\server\images\backgrounds')" />
   </ItemGroup>
+
+  <Target Name="CopyAppLogo" BeforeTargets="PrepareForBuild">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\logo.png" DestinationFiles="$(MSBuildThisFileDirectory)wwwroot\logo.png" Condition="Exists('$(MSBuildThisFileDirectory)..\..\logo.png')" />
+  </Target>
 
   <Target Name="FetchBinarygeek119Logos" BeforeTargets="PrepareForBuild" Condition="'$(SkipLogoFetch)' != 'true'">
     <Exec Condition="'$(OS)' != 'Windows_NT'" Command="python3 &quot;$(MSBuildThisFileDirectory)..\..\scripts\fetch-binarygeek119-logos.py&quot; &quot;$(MSBuildThisFileDirectory)wwwroot\logos\binarygeek119&quot;" />

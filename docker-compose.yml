@@ -1,6 +1,7 @@
 services:
-  fintv-server:
-    image: ghcr.io/fintvproject/fintv-server:latest
+  channelflow:
+    image: ghcr.io/flowmeadow01/channelflow:latest
+    container_name: ChannelFlow
     build: .
     ports:
       - "${FINTV_PORT:-8097}:8097"

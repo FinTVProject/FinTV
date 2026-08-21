@@ -18,14 +18,14 @@ public sealed class CatalogCleanupTask : IScheduledTask
         _logger = logger;
     }
 
-    public string Name => "FinTV Catalog Cleanup";
+    public string Name => "ChannelFlow-Server Catalog Cleanup";
 
     public string Key => "FinTVCatalogCleanup";
 
     public string Description =>
         "Marks catalog items missing when Jellyfin no longer reports them or their remapped local file is gone, then deletes them after the configured grace period.";
 
-    public string Category => "FinTV";
+    public string Category => "ChannelFlow-Server";
 
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
     {

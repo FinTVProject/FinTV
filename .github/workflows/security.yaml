@@ -39,7 +39,7 @@ jobs:
           build-mode: ${{ matrix.build-mode }}
           config-file: .github/codeql/codeql-config.yml
 
-      - name: Build FinTV Server
+      - name: Build ChannelFlow-Server
         if: matrix.language == 'csharp'
         run: dotnet build src/FinTv.Server/FinTv.Server.csproj -c Release /p:SkipLogoFetch=true
 
@@ -93,7 +93,7 @@ jobs:
               lines.append("Vulnerable packages:")
               lines.extend(f"- {item}" for item in findings)
           else:
-              lines.append("No known NuGet vulnerabilities in FinTV Server packages.")
+              lines.append("No known NuGet vulnerabilities in ChannelFlow-Server packages.")
 
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary_path:

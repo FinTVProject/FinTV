@@ -59,7 +59,7 @@ public class DatabaseInitializer : IHostedService
         await runtime.LoadAsync(cancellationToken);
         FinTvRuntime.Current = runtime;
 
-        _logger.LogInformation("FinTV database initialized");
+        _logger.LogInformation("ChannelFlow-Server database initialized");
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

@@ -190,7 +190,7 @@ public class PluginBridgeController : ControllerBase
     [HttpGet("live-tv-urls")]
     public ActionResult<object> LiveTvUrls()
     {
-        var baseUrl = FinTvRuntime.Current?.Configuration.PublicBaseUrl?.TrimEnd('/') ?? "http://FinTV-Server:8097";
+        var baseUrl = FinTvRuntime.Current?.Configuration.PublicBaseUrl?.TrimEnd('/') ?? "http://ChannelFlow-Server:8097";
         return Ok(new
         {
             m3u = PluginApiKey.AppendQuery($"{baseUrl}/iptv/channels.m3u"),

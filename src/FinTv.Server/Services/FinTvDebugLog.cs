@@ -9,7 +9,7 @@ namespace FinTv.Services;
 /// </summary>
 public static class FinTvDebugLog
 {
-    private const string AiLogTemplate = "[FinTV AI] {Detail}";
+    private const string AiLogTemplate = "[ChannelFlow AI] {Detail}";
 
     /// <summary>
     /// Gets whether verbose FinTV debug logging is enabled.

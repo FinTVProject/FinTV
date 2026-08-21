@@ -51,7 +51,7 @@ public class EpgService
         var root = new XElement(
             "tv",
             new XAttribute("generator-info-name", "FinTV"),
-            new XAttribute("generator-info-url", "https://github.com/binarygeek119/FinTV"));
+            new XAttribute("generator-info-url", "https://github.com/FlowMeadow01/ChannelFlow"));
 
         foreach (var channel in channels)
         {

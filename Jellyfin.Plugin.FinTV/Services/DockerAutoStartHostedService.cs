@@ -7,7 +7,7 @@ namespace Jellyfin.Plugin.FinTV.Services;
 
 /// <summary>
 /// Optionally pre-starts WeatherStar Docker containers when Jellyfin boots.
-/// Weather live streams themselves come from FinTV Server.
+/// Weather live streams themselves come from ChannelFlow-Server.
 /// </summary>
 public sealed class DockerAutoStartHostedService : IHostedService
 {

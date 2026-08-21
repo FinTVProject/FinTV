@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FinTV</title>
+  <title>ChannelFlow-Server</title>
+  <link rel="icon" href="/logo.png" type="image/png">
   <link rel="stylesheet" href="/css/legacy-admin.css">
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
   <div id="login-screen" class="auth-screen hidden">
     <form id="login-form" class="auth-card">
-      <img src="/logo.png" alt="FinTV" class="auth-logo">
+      <img src="/logo.png" alt="ChannelFlow-Server" class="auth-logo">
       <h1 id="auth-title">Sign in</h1>
-      <p id="auth-subtitle">FinTV Server</p>
+      <p id="auth-subtitle">ChannelFlow-Server</p>
       <label class="field"><span>Username</span><input id="login-user" autocomplete="username" required></label>
       <label class="field"><span>Password</span><input id="login-pass" type="password" autocomplete="current-password" required></label>
       <label class="field hidden" id="login-pass-confirm-field"><span>Confirm password</span><input id="login-pass-confirm" type="password" autocomplete="new-password" minlength="8"></label>
@@ -27,7 +28,7 @@
   </div>
   <div id="app-shell" class="hidden">
     <aside class="app-drawer">
-      <a href="/channels" class="drawer-brand" data-tab="channels"><img src="/logo.png" alt=""><span>FinTV</span></a>
+      <a href="/channels" class="drawer-brand" data-tab="channels"><img src="/logo.png" alt=""><span>ChannelFlow-Server</span></a>
       <nav class="drawer-nav" id="drawer-nav"></nav>
       <button type="button" id="btn-logout" class="drawer-logout">Sign out</button>
     </aside>
@@ -132,7 +133,7 @@
         <div id="fintv-app">
             <header class="fintv-header">
                 <div class="fintv-header-text">
-                    <h1>FinTV</h1>
+                    <h1>ChannelFlow-Server</h1>
                     <p>Simulated live TV channels for Jellyfin</p>
                 </div>
                 <div id="dashboard-stats" class="dashboard-stats"></div>
@@ -262,7 +263,7 @@
                     </label>
                     <p id="guide-range-label" class="hint" style="margin:0"></p>
                 </div>
-                <p class="hint">What's on across FinTV channels. Times use the schedule time zone from General. Click a programme for details.</p>
+                <p class="hint">What's on across ChannelFlow-Server channels. Times use the schedule time zone from General. Click a programme for details.</p>
                 <div id="tv-guide" class="tv-guide"></div>
             </section>
 
@@ -325,10 +326,10 @@
             <section id="tab-list" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <div class="section-header">
-                        <h3>FinTV Lists</h3>
+                        <h3>ChannelFlow Lists</h3>
                         <button type="button" id="btn-add-list" class="raised button-submit emby-button">Add from Jellyfin</button>
                     </div>
-                    <p class="hint">Register Jellyfin playlists as FinTV lists. Use them in Lineups, Overrides, Special Presentations, and AI slot edits.</p>
+                    <p class="hint">Register Jellyfin playlists as ChannelFlow lists. Use them in Lineups, Overrides, Special Presentations, and AI slot edits.</p>
                     <div id="lists-table" class="data-table-wrap"></div>
                 </div>
             </section>
@@ -339,7 +340,7 @@
                         <h3>Jellyfin Library</h3>
                         <button type="button" id="btn-save-jellyfin-libraries" class="raised button-submit emby-button">Save libraries</button>
                     </div>
-                    <p class="hint">Choose which Jellyfin libraries FinTV should pull from. TV shows each TV show library, movies shows each movie library, music shows each music library, and music videos shows each music video library. Names come from the Jellyfin plugin on catalog sync. Check as many as you want. Leave a type unchecked to use every matching library.</p>
+                    <p class="hint">Choose which Jellyfin libraries ChannelFlow-Server should pull from. TV shows each TV show library, movies shows each movie library, music shows each music library, and music videos shows each music video library. Names come from the Jellyfin plugin on catalog sync. Check as many as you want. Leave a type unchecked to use every matching library.</p>
                     <div class="jellyfin-library-grid">
                         <section class="library-pick-card">
                             <h4>TV</h4>
@@ -399,7 +400,7 @@
                     </label>
                     <button type="button" id="btn-add-special" class="raised button-submit emby-button">Add Presentation</button>
                 </div>
-                <p class="hint">Recurring day/time blocks that override AI or default lineup content on matching days. Use fixed items, metadata rules, or a registered FinTV list.</p>
+                <p class="hint">Recurring day/time blocks that override AI or default lineup content on matching days. Use fixed items, metadata rules, or a registered ChannelFlow list.</p>
                 <div id="special-list" class="data-table-wrap"></div>
             </section>
 
@@ -432,7 +433,7 @@
                 <p>Sync YouTube commercials from <a href="https://commercialbrainz.org/" target="_blank" rel="noopener">CommercialBrainz</a>.</p>
                 <div class="card section-card">
                     <h3>CommercialBrainz YouTube Pool</h3>
-                    <p class="hint">CommercialBrainz sync stores YouTube metadata only. At break time FinTV streams each spot directly into the channel (no local download). Click <strong>Preview Matches</strong> to see the commercials that the current filters will pull.</p>
+                    <p class="hint">CommercialBrainz sync stores YouTube metadata only. At break time ChannelFlow-Server streams each spot directly into the channel (no local download). Click <strong>Preview Matches</strong> to see the commercials that the current filters will pull.</p>
                     <div class="form-grid">
                         <label class="field checkbox-field">
                             <input id="cb-enabled" type="checkbox" checked>
@@ -617,16 +618,6 @@
                         <span class="fintv-check-box" aria-hidden="true"></span>
                         <span>Apply AI lineups to all eligible channels when saving settings (14-day playout rebuild)</span>
                     </label>
-                    <label class="field checkbox-field">
-                        <input type="checkbox" id="ai-auto-tag-weekly">
-                        <span class="fintv-check-box" aria-hidden="true"></span>
-                        <span>Weekly auto-tag library items with fintv-* channel tags (Sunday 2:00 AM scheduled task)</span>
-                    </label>
-                    <label class="field checkbox-field">
-                        <input type="checkbox" id="ai-use-auto-tagged-catalog">
-                        <span class="fintv-check-box" aria-hidden="true"></span>
-                        <span>Use auto-tagged fintv-* tags for faster AI catalog loading</span>
-                    </label>
                     <div class="actions" style="margin-bottom:1rem">
                         <button type="button" id="btn-save-ai-settings" class="raised button-submit emby-button">Save AI Settings</button>
                         <button type="button" id="btn-test-ai" class="emby-button">Test Connection</button>
@@ -659,7 +650,7 @@
                         <input id="ai-venice-model" type="text" class="emby-input" placeholder="gpt-4o-mini">
                     </label>
                     <p id="ai-key-status" class="hint"></p>
-                    <p class="hint">AI lineups build up to <strong>14 days</strong> of playout. FinTV auto-extends the schedule as each day ends. Auto-apply sets content mix and playout template from channel rules, generates the lineup, and rebuilds playout. The scheduled task adds <strong>one day</strong> when the horizon drops to 13 days instead of rebuilding all 14. Queued new channels can also be processed from <strong>Dashboard → Scheduled Tasks → FinTV AI Lineup Auto-Apply (Channel Add)</strong>.</p>
+                    <p class="hint">AI lineups build up to <strong>14 days</strong> of playout. ChannelFlow-Server auto-extends the schedule as each day ends. Auto-apply sets content mix and playout template from channel rules, generates the lineup, and rebuilds playout. The scheduled task adds <strong>one day</strong> when the horizon drops to 13 days instead of rebuilding all 14. Queued new channels can also be processed from <strong>Dashboard → Scheduled Tasks → ChannelFlow-Server AI Lineup Auto-Apply (Channel Add)</strong>.</p>
                 </div>
                 <div class="card section-card">
                     <div class="section-header-row">
@@ -669,19 +660,8 @@
                             <button type="button" id="btn-weather-guide-cache-clear" class="emby-button">Delete Weather Guide Cache</button>
                         </div>
                     </div>
-                    <p class="hint">When AI is enabled, FinTV generates TV-guide-style titles and descriptions for each weather channel location and hour of day (0–23). Generation runs once when you click <strong>Generate Weather Guide Cache</strong>, then the same metadata is reused every day for matching time slots. EPG and playout builds read the cache only — they do not call the LLM.</p>
+                    <p class="hint">When AI is enabled, ChannelFlow-Server generates TV-guide-style titles and descriptions for each weather channel location and hour of day (0–23). Generation runs once when you click <strong>Generate Weather Guide Cache</strong>, then the same metadata is reused every day for matching time slots. EPG and playout builds read the cache only — they do not call the LLM.</p>
                     <p id="ai-weather-guide-cache-status" class="hint">Loading weather guide cache status…</p>
-                </div>
-                <div class="card section-card">
-                    <div class="section-header-row">
-                        <h3>Channel auto-tagging</h3>
-                        <div class="actions section-header-actions">
-                            <button type="button" id="btn-channel-tagging-run" class="emby-button">Run Tagging Now</button>
-                            <button type="button" id="btn-channel-tagging-full" class="emby-button">Full Library Retag</button>
-                        </div>
-                    </div>
-                    <p class="hint">FinTV can write <code>fintv-*</code> tags onto movies, series, and music videos using the same channel rules used for AI lineups. When enabled, AI catalog loading queries those tags first so Generate All is much faster on large libraries. Run once before your first Generate All, or enable the weekly scheduled task to pick up new media automatically.</p>
-                    <p id="ai-channel-tagging-status" class="hint">Loading channel tagging status…</p>
                 </div>
                 <div class="card section-card">
                     <div class="section-header-row">
@@ -806,7 +786,7 @@
                     </label>
                     <label class="field">
                         <span>Custom scroll text</span>
-                        <input id="wx-customText" type="text" class="emby-input" placeholder="You're watching FinTV Weather">
+                        <input id="wx-customText" type="text" class="emby-input" placeholder="You're watching ChannelFlow Weather">
                     </label>
                     <label class="field checkbox-field">
                         <input id="wx-scanLines" type="checkbox">
@@ -827,7 +807,7 @@
             <section id="tab-general" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <h2>General</h2>
-                    <p class="hint">Server-wide settings. Debug logging writes extra detail to the FinTV log for troubleshooting AI channel building and playout.</p>
+                    <p class="hint">Server-wide settings. Debug logging writes extra detail to the ChannelFlow-Server log for troubleshooting AI channel building and playout.</p>
                     <label class="field">
                         <span>Plugin API key</span>
                         <input id="general-api-key" type="text" class="emby-input" autocomplete="off" spellcheck="false">
@@ -842,7 +822,7 @@
                         <span class="fintv-check-box" aria-hidden="true"></span>
                         <span>Debug logging (verbose developer logs)</span>
                     </label>
-                    <p class="hint">When enabled, FinTV logs detailed AI lineup, catalog, LLM, and playout build steps with an <code>[FinTV AI]</code> prefix. Leave off for normal operation.</p>
+                    <p class="hint">When enabled, ChannelFlow-Server logs detailed AI lineup, catalog, LLM, and playout build steps with an <code>[ChannelFlow AI]</code> prefix. Leave off for normal operation.</p>
                     <label class="field">
                         <span>Schedule time zone</span>
                         <select id="general-schedule-tz" class="emby-input"></select>
@@ -890,8 +870,8 @@
             <section id="tab-news" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <div class="section-header"><h3>Live news channel</h3></div>
-                    <p class="hint">Apply the <strong>FinTV News</strong> preset (or set a channel to content type News). FinTV fetches RSS, scrolls headlines with an ASS overlay, optionally reads them with TTS, and mixes a Jellyfin music bed into a 24/7 MPEG-TS stream.</p>
-                    <label class="field"><span>Header text</span><input id="news-header" type="text" class="emby-input" placeholder="FinTV News"></label>
+                    <p class="hint">Apply the <strong>ChannelFlow News</strong> preset (or set a channel to content type News). ChannelFlow-Server fetches RSS, scrolls headlines with an ASS overlay, optionally reads them with TTS, and mixes a Jellyfin music bed into a 24/7 MPEG-TS stream.</p>
+                    <label class="field"><span>Header text</span><input id="news-header" type="text" class="emby-input" placeholder="ChannelFlow News"></label>
                     <label class="field"><span>Article count</span><input id="news-count" type="number" min="1" max="30" value="8" class="emby-input"></label>
                     <label class="field"><span>Refresh interval (minutes)</span><input id="news-refresh" type="number" min="2" max="120" value="10" class="emby-input"></label>
                     <label class="field">
@@ -909,7 +889,7 @@
                             <option value="zh-CN">Chinese</option>
                         </select>
                     </label>
-                    <label class="field"><span>Read intro</span><input id="news-intro" type="text" class="emby-input" placeholder="You're watching FinTV News"></label>
+                    <label class="field"><span>Read intro</span><input id="news-intro" type="text" class="emby-input" placeholder="You're watching ChannelFlow News"></label>
                     <label class="field"><span>Read outro</span><input id="news-outro" type="text" class="emby-input" placeholder="Those are the headlines."></label>
                     <label class="field checkbox-field"><input id="news-tts" type="checkbox" checked><span class="fintv-check-box"></span><span>Enable TTS</span></label>
                     <label class="field checkbox-field"><input id="news-show-header" type="checkbox" checked><span class="fintv-check-box"></span><span>Show header on screen</span></label>

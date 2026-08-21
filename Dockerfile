@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 ca-cert
 COPY global.json ./
 COPY src/FinTv.Server/ src/FinTv.Server/
 COPY scripts/ scripts/
-COPY logo.png ./
+COPY logo.png src/FinTv.Server/wwwroot/logo.png
 COPY vendor/ws4kp/server/fonts vendor/ws4kp/server/fonts
 COPY vendor/ws4kp/server/images/backgrounds vendor/ws4kp/server/images/backgrounds
 COPY vendor/ws4kp/server/images/icons/current-conditions vendor/ws4kp/server/images/icons/current-conditions

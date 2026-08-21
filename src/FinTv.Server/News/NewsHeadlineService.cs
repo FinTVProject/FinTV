@@ -80,7 +80,7 @@ public sealed class NewsHeadlineService
         client.Timeout = TimeSpan.FromSeconds(20);
         if (client.DefaultRequestHeaders.UserAgent.Count == 0)
         {
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("FinTV/0.0.3 (news)");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("ChannelFlow-Server/0.0.3 (news)");
         }
 
         foreach (var feed in feeds)

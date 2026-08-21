@@ -65,8 +65,6 @@ public class PluginConfiguration
 
     public BlackframeTaskState BlackframeTaskState { get; set; } = new();
 
-    public ChannelAutoTaggingTaskState ChannelAutoTaggingTaskState { get; set; } = new();
-
     public CommercialBrainzSettings CommercialBrainz { get; set; } = new();
 
     public List<CommercialSearchPlaylist> CommercialSearchPlaylists { get; set; } = new();
@@ -131,29 +129,6 @@ public class AiSettings
     public bool AutoApplyOnChannelAdd { get; set; }
 
     public bool AutoApplyToAllChannelsOnSave { get; set; }
-
-    public bool AutoTagChannelsWeekly { get; set; }
-
-    public bool UseAutoTaggedCatalog { get; set; } = true;
-}
-
-public class ChannelAutoTaggingTaskState
-{
-    public bool IsRunning { get; set; }
-
-    public int TotalItems { get; set; }
-
-    public int ProcessedItems { get; set; }
-
-    public int TaggedItems { get; set; }
-
-    public int SkippedItems { get; set; }
-
-    public string? LastError { get; set; }
-
-    public DateTime? LastStartedAt { get; set; }
-
-    public DateTime? LastCompletedAt { get; set; }
 }
 
 public class CatalogCleanupSettings

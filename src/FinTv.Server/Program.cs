@@ -62,12 +62,12 @@ builder.Services.AddHttpClient(nameof(CommercialBrainzClient))
     .ConfigureHttpClient(client =>
     {
         client.Timeout = TimeSpan.FromMinutes(5);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("FinTV/0.0.3 (CommercialBrainz)");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("ChannelFlow-Server/0.0.3 (CommercialBrainz)");
     });
 builder.Services.AddHttpClient("Weather", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(25);
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("FinTV/1.0 (https://github.com/FinTVProject/FinTV)");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("ChannelFlow-Server/1.0 (https://github.com/FlowMeadow01/ChannelFlow)");
 });
 builder.Services.AddHttpClient();
 
@@ -118,7 +118,6 @@ builder.Services.AddScoped<AiCatalogManifestBuilder>();
 builder.Services.AddScoped<LlmClientService>();
 builder.Services.AddScoped<AiLineupGeneratorService>();
 builder.Services.AddScoped<AiChannelAutoApplyService>();
-builder.Services.AddScoped<FinTvChannelTaggingService>();
 builder.Services.AddScoped<EbsService>();
 builder.Services.AddSingleton<NewsHeadlineService>();
 builder.Services.AddSingleton<NewsTtsService>();

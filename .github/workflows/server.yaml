@@ -1,4 +1,4 @@
-name: Build FinTV Server
+name: Build ChannelFlow-Server
 
 on:
   push:
