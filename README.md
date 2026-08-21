@@ -34,18 +34,18 @@ Image: `ghcr.io/fintvproject/fintv-server:latest` (built from this repo). Unraid
 
 ```bash
 cp .env.example .env
-# set FINTV_API_KEY, FINTV_ADMIN_PASSWORD, FINTV_MEDIA, and POSTGRES_* for your existing database
+# set FINTV_API_KEY, FINTV_MEDIA, and POSTGRES_* for your existing database
 docker compose up -d --build
 ```
 
 Then:
 
-1. Open `http://<host>:8097` and sign in (`FINTV_ADMIN_USER` / `FINTV_ADMIN_PASSWORD` on first run)
+1. Open `http://<host>:8097` and create the admin username and password on first launch
 2. Add path remaps under General (Jellyfin prefix → `/media` or your mount)
 3. Install the FinTV plugin, set Server URL + API key (`FINTV_API_KEY`), run **FinTV Catalog Sync**
 4. Join FinTV Server and Jellyfin to the **same Docker network** as your PostgreSQL instance
 
-Unraid: point `POSTGRES_HOST` at your existing Postgres container on a custom network with Jellyfin.
+Unraid: point `POSTGRES_HOST` at your existing Postgres container on a custom network with Jellyfin. Pass `/dev/dri` into the container for Intel VAAPI encode/decode (enabled by default as `FFMPEG_HWACCEL=vaapi`).
 
 ## IPTV
 

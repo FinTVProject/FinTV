@@ -11,11 +11,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-fintv}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fintv}
       FINTV_API_KEY: ${FINTV_API_KEY:-change-me}
-      FINTV_ADMIN_USER: ${FINTV_ADMIN_USER:-admin}
-      FINTV_ADMIN_PASSWORD: ${FINTV_ADMIN_PASSWORD:-changeme}
       FINTV_CONFIG: /config
       JELLYFIN_URL: ${JELLYFIN_URL:-http://jellyfin:8096}
       TZ: ${TZ:-America/Chicago}
+      FFMPEG_HWACCEL: ${FFMPEG_HWACCEL:-vaapi}
+      FFMPEG_VAAPI_DEVICE: ${FFMPEG_VAAPI_DEVICE:-/dev/dri/renderD128}
+    devices:
+      - /dev/dri:/dev/dri
     volumes:
       - fintv-config:/config
       - ${FINTV_MEDIA:-./media}:/media

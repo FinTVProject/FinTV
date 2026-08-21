@@ -46,21 +46,6 @@ public class DatabaseInitializer : IHostedService
             await db.SaveChangesAsync(cancellationToken);
         }
 
-        var adminUser = Environment.GetEnvironmentVariable("FINTV_ADMIN_USER");
-        var adminPassword = Environment.GetEnvironmentVariable("FINTV_ADMIN_PASSWORD");
-        if (!string.IsNullOrWhiteSpace(adminUser)
-            && !string.IsNullOrWhiteSpace(adminPassword)
-            && !await db.AdminUsers.AnyAsync(cancellationToken))
-        {
-            db.AdminUsers.Add(new Domain.AdminUser
-            {
-                UserName = adminUser.Trim(),
-                PasswordHash = Services.PasswordHasher.Hash(adminPassword)
-            });
-            await db.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Created FinTV admin user {User}", adminUser);
-        }
-
         var runtime = scope.ServiceProvider.GetRequiredService<FinTvRuntime>();
         await runtime.LoadAsync(cancellationToken);
         FinTvRuntime.Current = runtime;

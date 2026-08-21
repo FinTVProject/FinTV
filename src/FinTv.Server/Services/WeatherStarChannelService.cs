@@ -33,6 +33,7 @@ public class WeatherStarChannelService
 
     private readonly ILogger<WeatherStarChannelService> _logger;
     private readonly FfmpegCommandBuilder _ffmpegBuilder;
+    private readonly FfmpegEncodingService _encoding;
     private readonly EbsService _ebs;
     private readonly IFfmpegLocator _mediaEncoder;
     private readonly WeatherRendererHost _renderer;
@@ -42,6 +43,7 @@ public class WeatherStarChannelService
     public WeatherStarChannelService(
         ILogger<WeatherStarChannelService> logger,
         FfmpegCommandBuilder ffmpegBuilder,
+        FfmpegEncodingService encoding,
         EbsService ebs,
         IFfmpegLocator mediaEncoder,
         WeatherRendererHost renderer,
@@ -50,6 +52,7 @@ public class WeatherStarChannelService
     {
         _logger = logger;
         _ffmpegBuilder = ffmpegBuilder;
+        _encoding = encoding;
         _ebs = ebs;
         _mediaEncoder = mediaEncoder;
         _renderer = renderer;
@@ -360,9 +363,10 @@ public class WeatherStarChannelService
         var hasMusic = !string.IsNullOrWhiteSpace(musicPath) && File.Exists(musicPath);
         var args = new List<string>
         {
-            "-hide_banner", "-loglevel", "warning",
-            "-f", "lavfi", "-i", $"color=c=0x0b1d36:s={width}x{height}:r=30"
+            "-hide_banner", "-loglevel", "warning"
         };
+        args.AddRange(_encoding.HardwareDeviceArgs);
+        args.AddRange(["-f", "lavfi", "-i", $"color=c=0x0b1d36:s={width}x{height}:r=30"]);
         if (hasMusic)
         {
             args.AddRange(["-stream_loop", "-1", "-i", musicPath!]);
@@ -372,10 +376,15 @@ public class WeatherStarChannelService
             args.AddRange(["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]);
         }
 
+        var vf = _encoding.AdaptVideoFilterForEncoder(
+            $"drawtext=text='WeatherStar':fontcolor=white:fontsize=36:x=40:y=40,drawtext=text='{text}':fontcolor=white:fontsize=22:x=40:y=120:text_w=w-80",
+            _encoding.Encoder);
         args.AddRange([
-            "-vf", $"drawtext=text='WeatherStar':fontcolor=white:fontsize=36:x=40:y=40,drawtext=text='{text}':fontcolor=white:fontsize=22:x=40:y=120:text_w=w-80",
-            "-map", "0:v", "-map", "1:a",
-            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-g", "30",
+            "-vf", vf,
+            "-map", "0:v", "-map", "1:a"
+        ]);
+        _encoding.AppendVideoEncoder(args, stillImage: true);
+        args.AddRange([
             "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
             "-t", "120",
             "-f", "mpegts", "pipe:1"

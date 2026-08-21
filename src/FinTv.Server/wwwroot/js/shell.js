@@ -54,8 +54,16 @@
         document.getElementById('auth-title').textContent = needsSetup ? 'Create admin' : 'Sign in';
         document.getElementById('login-submit').textContent = needsSetup ? 'Create account' : 'Sign in';
         document.getElementById('auth-subtitle').textContent = needsSetup
-            ? 'Choose a username and password for FinTV Server'
+            ? 'First launch — choose a username and password for FinTV Server'
             : 'FinTV Server';
+        const confirmField = document.getElementById('login-pass-confirm-field');
+        const confirmInput = document.getElementById('login-pass-confirm');
+        const passInput = document.getElementById('login-pass');
+        confirmField.classList.toggle('hidden', !needsSetup);
+        confirmInput.required = !!needsSetup;
+        confirmInput.minLength = needsSetup ? 8 : 0;
+        passInput.minLength = needsSetup ? 8 : 0;
+        passInput.autocomplete = needsSetup ? 'new-password' : 'current-password';
         if (userName) {
             document.getElementById('topbar-user').textContent = userName;
         }
@@ -146,13 +154,19 @@
 
             document.getElementById('login-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
+                const password = document.getElementById('login-pass').value;
+                const confirm = document.getElementById('login-pass-confirm').value;
                 const body = {
                     userName: document.getElementById('login-user').value,
-                    password: document.getElementById('login-pass').value
+                    password
                 };
                 const err = document.getElementById('login-error');
                 try {
-                    const path = status.needsSetup && !status.authenticated ? '/api/auth/setup' : '/api/auth/login';
+                    const needsSetup = status.needsSetup && !status.authenticated;
+                    if (needsSetup && password !== confirm) {
+                        throw new Error('Passwords do not match.');
+                    }
+                    const path = needsSetup ? '/api/auth/setup' : '/api/auth/login';
                     const result = await postJson(path, body);
                     showApp(result.userName);
                     err.textContent = '';
