@@ -184,7 +184,7 @@ public class AiLineupGeneratorService
         catch (TimeZoneNotFoundException ex)
         {
             throw new InvalidOperationException(
-                "Invalid schedule time zone in FinTV settings. Set Dashboard → Plugins → FinTV → schedule time zone to a valid IANA id (e.g. America/New_York).",
+                "Invalid schedule time zone in ChannelFlow settings. Set Dashboard → Plugins → ChannelFlow → schedule time zone to a valid IANA id (e.g. America/New_York).",
                 ex);
         }
         catch (Exception ex)
@@ -659,7 +659,7 @@ public class AiLineupGeneratorService
             : "\n" + templateSection;
 
         return """
-            You are a TV channel scheduling assistant for FinTV.
+            You are a TV channel scheduling assistant for ChannelFlow.
             Build a 48-slot daily lineup (each base slot is 30 minutes, slotIndex 0 = midnight).
             Reply with JSON only using this shape:
             {"slots":[{"slotIndex":0,"spanSlots":1,"jellyfinItemId":"guid"}, ...]}

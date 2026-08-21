@@ -30,7 +30,7 @@ public sealed class PluginManifestRepairHostedService : IHostedService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "FinTV could not repair plugin manifest image settings.");
+            _logger.LogWarning(ex, "ChannelFlow could not repair plugin manifest image settings.");
         }
 
         return Task.CompletedTask;
@@ -74,7 +74,7 @@ public sealed class PluginManifestRepairHostedService : IHostedService
         if (changed)
         {
             File.WriteAllText(metaPath, node.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            _logger.LogInformation("FinTV plugin manifest now uses embedded plugin image resource.");
+            _logger.LogInformation("ChannelFlow plugin manifest now uses embedded plugin image resource.");
         }
 
         var diskLogo = Path.Combine(pluginDir, DiskLogoFileName);
@@ -90,7 +90,7 @@ public sealed class PluginManifestRepairHostedService : IHostedService
         }
         catch (IOException ex)
         {
-            _logger.LogDebug(ex, "FinTV could not delete disk plugin logo {LogoPath}; it may be in use.", diskLogo);
+            _logger.LogDebug(ex, "ChannelFlow could not delete disk plugin logo {LogoPath}; it may be in use.", diskLogo);
         }
     }
 }

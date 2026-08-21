@@ -1,7 +1,7 @@
 namespace Jellyfin.Plugin.FinTV.Services;
 
 /// <summary>
-/// Active IPTV stream counts for a FinTV channel.
+/// Active IPTV stream counts for a ChannelFlow channel.
 /// </summary>
 public class ChannelStreamStatus
 {

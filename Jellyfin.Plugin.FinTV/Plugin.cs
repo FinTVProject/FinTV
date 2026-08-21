@@ -10,12 +10,12 @@ using MediaBrowser.Model.Serialization;
 namespace Jellyfin.Plugin.FinTV;
 
 /// <summary>
-/// FinTV Jellyfin plugin entry point.
+/// ChannelFlow Jellyfin plugin entry point.
 /// </summary>
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IHasEmbeddedImage
 {
     /// <summary>
-    /// Embedded resource name for the FinTV plugin catalog icon.
+    /// Embedded resource name for the ChannelFlow plugin catalog icon.
     /// </summary>
     public const string PluginImageResourceName = "Jellyfin.Plugin.FinTV.logo.png";
 
@@ -39,7 +39,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IHasEmbedde
     public string ImageResourceName => PluginImageResourceName;
 
     /// <inheritdoc />
-    public override string Name => "FinTV";
+    public override string Name => "ChannelFlow";
 
     /// <inheritdoc />
     public override Guid Id => Guid.Parse("f4e8a2b1-3c5d-4e6f-9a8b-7c6d5e4f3a2b");
@@ -98,12 +98,12 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IHasEmbedde
             },
             new PluginPageInfo
             {
-                Name = "FinTV_admin.css",
+                Name = "ChannelFlow_admin.css",
                 EmbeddedResourcePath = resourcePrefix + "admin.css"
             },
             new PluginPageInfo
             {
-                Name = "FinTV_admin.js",
+                Name = "ChannelFlow_admin.js",
                 EmbeddedResourcePath = resourcePrefix + "admin.js"
             }
         ];

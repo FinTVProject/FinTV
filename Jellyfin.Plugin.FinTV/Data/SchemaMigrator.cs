@@ -249,7 +249,7 @@ internal static class SchemaMigrator
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Applying FinTV lists schema migration");
+        logger.LogInformation("Applying ChannelFlow lists schema migration");
 
         await db.Database.ExecuteSqlRawAsync(
             """

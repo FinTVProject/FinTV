@@ -326,7 +326,7 @@ public class EpgService
         var configured = FinTvRuntime.Current?.Configuration.PublicBaseUrl;
         if (string.IsNullOrWhiteSpace(configured))
         {
-            configured = Environment.GetEnvironmentVariable("FINTV_PUBLIC_URL");
+            configured = Environment.GetEnvironmentVariable("CHANNELFLOW_PUBLIC_URL");
         }
 
         if (!string.IsNullOrWhiteSpace(configured))

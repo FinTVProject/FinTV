@@ -24,6 +24,7 @@ internal static class CatalogSchema
             """CREATE INDEX IF NOT EXISTS "IX_Episodes_LibraryId" ON "Episodes" ("LibraryId")""",
             """CREATE INDEX IF NOT EXISTS "IX_Episodes_JellyfinItemId" ON "Episodes" ("JellyfinItemId")""",
             """CREATE INDEX IF NOT EXISTS "IX_Episodes_SeriesId" ON "Episodes" ("SeriesId")""",
+            """ALTER TABLE "Episodes" DROP COLUMN IF EXISTS "IsSeries" """,
             """
             DO $$
             BEGIN

@@ -50,7 +50,7 @@ public class EpgService
 
         var root = new XElement(
             "tv",
-            new XAttribute("generator-info-name", "FinTV"),
+            new XAttribute("generator-info-name", "ChannelFlow"),
             new XAttribute("generator-info-url", "https://github.com/FlowMeadow01/ChannelFlow"));
 
         foreach (var channel in channels)
@@ -217,7 +217,7 @@ public class EpgService
                 .Append("\",")
                 .AppendLine(channel.Name);
 
-            sb.AppendLine(CultureInfo.InvariantCulture, $"{baseUrl.TrimEnd('/')}/FinTV/iptv/stream/{channel.Id:N}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"{baseUrl.TrimEnd('/')}/ChannelFlow/iptv/stream/{channel.Id:N}");
         }
 
         return sb.ToString();
@@ -271,7 +271,7 @@ public class EpgService
 
         if (!string.IsNullOrWhiteSpace(fileName))
         {
-            return $"{baseUrl.TrimEnd('/')}/FinTV/api/logos/{channel.Id:N}/{Uri.EscapeDataString(fileName)}";
+            return $"{baseUrl.TrimEnd('/')}/ChannelFlow/api/logos/{channel.Id:N}/{Uri.EscapeDataString(fileName)}";
         }
 
         return string.Empty;

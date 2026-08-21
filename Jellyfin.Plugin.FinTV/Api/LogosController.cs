@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.FinTV.Api;
 /// REST endpoints for channel logo sets and logo file serving.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/logos")]
+[Route("ChannelFlow/api/logos")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class LogosController : ControllerBase
 {

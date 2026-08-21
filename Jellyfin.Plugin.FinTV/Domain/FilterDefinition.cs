@@ -8,7 +8,8 @@ namespace Jellyfin.Plugin.FinTV.Domain;
 public class FilterDefinition
 {
     /// <summary>
-    /// Preset identifier (e.g. fintv-retro). Used for channel rules, not Jellyfin tag queries.
+    /// Preset identifier (e.g. channelflow-retro). Used for channel rules, not Jellyfin tag queries.
+    /// Legacy fintv-* values are accepted as aliases.
     /// </summary>
     public string? PresetId { get; set; }
 
@@ -43,9 +44,45 @@ public class FilterDefinition
         }
     }
 
-    public static bool IsFintvChannelTag(string? tag)
-        => !string.IsNullOrWhiteSpace(tag)
-           && tag.StartsWith("fintv-", StringComparison.OrdinalIgnoreCase);
+    public const string PresetPrefix = "channelflow-";
+
+    public const string LegacyPresetPrefix = "fintv-";
+
+    public static bool IsChannelPresetId(string? tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            return false;
+        }
+
+        return tag.StartsWith(PresetPrefix, StringComparison.OrdinalIgnoreCase)
+            || tag.StartsWith(LegacyPresetPrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string CanonicalPresetId(string? tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = tag.Trim();
+        if (trimmed.StartsWith(LegacyPresetPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return PresetPrefix + trimmed[LegacyPresetPrefix.Length..];
+        }
+
+        return trimmed;
+    }
+
+    public static bool PresetIdsEqual(string? left, string? right)
+    {
+        var a = CanonicalPresetId(left);
+        var b = CanonicalPresetId(right);
+        return a.Length > 0 && a.Equals(b, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsFintvChannelTag(string? tag) => IsChannelPresetId(tag);
 
     public static string? ExtractFintvLibraryTag(string? filterJson)
     {
@@ -60,12 +97,11 @@ public class FilterDefinition
             return filter.PresetId;
         }
 
-        return filter.Tags?
-            .FirstOrDefault(tag => tag.StartsWith("fintv-", StringComparison.OrdinalIgnoreCase));
+        return filter.Tags?.FirstOrDefault(IsChannelPresetId);
     }
 
     /// <summary>
-    /// Optional Jellyfin tags from filter JSON (excludes leftover fintv-* preset identifiers).
+    /// Optional Jellyfin tags from filter JSON (excludes leftover ChannelFlow/ChannelFlow preset identifiers).
     /// </summary>
     public static IReadOnlyList<string> GetOptionalJellyfinTags(string? filterJson)
     {
@@ -78,7 +114,7 @@ public class FilterDefinition
         return filter.Tags
             .Where(tag =>
                 !string.IsNullOrWhiteSpace(tag)
-                && !tag.StartsWith("fintv-", StringComparison.OrdinalIgnoreCase))
+                && !IsChannelPresetId(tag))
             .ToList();
     }
 }

@@ -16,7 +16,7 @@ public sealed class NewsBulletinTask : IScheduledTask
 
     public string Name => "ChannelFlow News Video";
 
-    public string Key => "FinTVNewsBulletin";
+    public string Key => "ChannelFlowNewsBulletin";
 
     public string Description =>
         "Encodes a news bulletin MP4 every 6 hours (00:00, 06:00, 12:00, 18:00 local). Skips when there are no new RSS stories, or fewer than the configured minimum.";

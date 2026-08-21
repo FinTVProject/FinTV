@@ -65,7 +65,7 @@ public sealed class DockerAutoStartHostedService : IHostedService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "FinTV could not auto-start WeatherStar Docker.");
+            _logger.LogWarning(ex, "ChannelFlow could not auto-start WeatherStar Docker.");
         }
     }
 }

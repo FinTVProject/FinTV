@@ -7,10 +7,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jellyfin.Plugin.FinTV.Api;
 
 /// <summary>
-/// FinTV list registry backed by Jellyfin playlists.
+/// ChannelFlow list registry backed by Jellyfin playlists.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/lists")]
+[Route("ChannelFlow/api/lists")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class ListsController : ControllerBase
 {

@@ -211,7 +211,7 @@ public sealed class FfmpegLocator : IFfmpegLocator
 public sealed class PublicBaseUrl : IPublicBaseUrl
 {
     public string GetLoopbackHttpAddress()
-        => Environment.GetEnvironmentVariable("FINTV_PUBLIC_URL")
+        => AppEnvironment.Get("PUBLIC_URL")
            ?? "http://127.0.0.1:8097";
 
     public string GetSmartApiUrl(HttpRequest request)
@@ -222,7 +222,7 @@ public sealed class PublicBaseUrl : IPublicBaseUrl
             return configured.TrimEnd('/');
         }
 
-        var fromEnv = Environment.GetEnvironmentVariable("FINTV_PUBLIC_URL");
+        var fromEnv = AppEnvironment.Get("PUBLIC_URL");
         if (!string.IsNullOrWhiteSpace(fromEnv))
         {
             return fromEnv.Trim().TrimEnd('/');

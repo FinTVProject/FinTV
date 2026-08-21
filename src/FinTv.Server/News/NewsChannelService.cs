@@ -79,7 +79,7 @@ public sealed class NewsChannelService
         if (result != 0 && !cancellationToken.IsCancellationRequested)
         {
             _logger.LogWarning("News ffmpeg with ASS overlay exited {Code}; using drawtext fallback", result);
-            await StreamDrawtextFallbackAsync(channel, header, articles, musicPath, speechPath, duration, output, cancellationToken);
+            await StreamDrawtextFallbackAsync(channel, header, articles, musicPath, speechPath, duration, newsDir, output, cancellationToken);
         }
     }
 
@@ -126,7 +126,7 @@ public sealed class NewsChannelService
         if (exit != 0 && !cancellationToken.IsCancellationRequested)
         {
             _logger.LogWarning("News bulletin ASS encode exited {Code}; using drawtext fallback", exit);
-            var fallback = BuildDrawtextArgs(header, articles, musicPath, speechPath, duration, width, height);
+            var fallback = BuildDrawtextArgs(header, articles, musicPath, speechPath, duration, width, height, workDir);
             AppendMux(fallback, duration, mpegts: false, filePath: outputMp4);
             exit = await RunFfmpegAsync(fallback, output: null, cancellationToken);
         }
@@ -148,14 +148,21 @@ public sealed class NewsChannelService
         };
         args.AddRange(_encoding.HardwareDeviceArgs);
         args.AddRange(["-f", "lavfi", "-i", $"color=c=0x101010:s={width}x{height}:r=30"]);
-        AppendAudioBed(args, musicPath);
+        var hasMusic = HasAudioFile(musicPath);
+        var hasSpeech = HasAudioFile(speechPath);
+        if (hasMusic || !hasSpeech)
+        {
+            AppendAudioBed(args, musicPath);
+        }
 
-        var hasSpeech = !string.IsNullOrWhiteSpace(speechPath) && File.Exists(speechPath);
         if (hasSpeech)
         {
             args.AddRange(["-i", speechPath!]);
+            var audioGraph = hasMusic
+                ? "[1:a]volume=0.18[a1];[2:a]volume=1.0[a2];[a1][a2]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+                : "[1:a]volume=1.0[aout]";
             var graph = _encoding.AdaptFilterComplexForEncoder(
-                $"[0:v]ass='{assFilter}'[vout];[1:a]volume=0.18[a1];[2:a]volume=1.0[a2];[a1][a2]amix=inputs=2:duration=first:dropout_transition=2[aout]",
+                $"[0:v]ass='{assFilter}'[vout];{audioGraph}",
                 _encoding.Encoder);
             args.AddRange(["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]"]);
         }
@@ -172,11 +179,14 @@ public sealed class NewsChannelService
         return args;
     }
 
+    private static bool HasAudioFile(string? path)
+        => !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+
     private static void AppendAudioBed(List<string> args, string? musicPath)
     {
-        if (!string.IsNullOrWhiteSpace(musicPath) && File.Exists(musicPath))
+        if (HasAudioFile(musicPath))
         {
-            args.AddRange(["-stream_loop", "-1", "-i", musicPath]);
+            args.AddRange(["-stream_loop", "-1", "-i", musicPath!]);
         }
         else
         {
@@ -224,11 +234,12 @@ public sealed class NewsChannelService
         string? musicPath,
         string? speechPath,
         int duration,
+        string workDir,
         Stream output,
         CancellationToken cancellationToken)
     {
         var (width, height) = channel.AspectRatio == AspectRatioMode.FourThree ? (640, 480) : (1280, 720);
-        var args = BuildDrawtextArgs(header, articles, musicPath, speechPath, duration, width, height);
+        var args = BuildDrawtextArgs(header, articles, musicPath, speechPath, duration, width, height, workDir);
         AppendMux(args, duration, mpegts: true, filePath: null);
         await RunFfmpegAsync(args, output, cancellationToken);
     }
@@ -240,16 +251,20 @@ public sealed class NewsChannelService
         string? speechPath,
         int duration,
         int width,
-        int height)
+        int height,
+        string workDir)
     {
         _ = duration;
-        var scroll = EscapeDraw(string.Join("   •   ", articles.Select(a => a.Title).DefaultIfEmpty("No headlines loaded")));
-        var vf = _encoding.AdaptVideoFilterForEncoder(
+        Directory.CreateDirectory(workDir);
+        var tickerPath = Path.Combine(workDir, "ticker.txt");
+        var ticker = string.Join("   •   ", articles.Select(a => a.Title).DefaultIfEmpty("No headlines loaded"));
+        File.WriteAllText(tickerPath, ticker);
+        var tickerFilter = NewsAssBuilder.EscapeAssFilterPath(tickerPath);
+        var vf =
             $"drawbox=x=0:y=0:w=iw:h=90:color=0xe11d48@0.92:t=fill," +
             $"drawtext=text='{EscapeDraw(header)}':fontcolor=white:fontsize=36:x=40:y=28," +
             $"drawbox=x=0:y=h-80:w=iw:h=80:color=0x202020@0.92:t=fill," +
-            $"drawtext=text='{scroll}':fontcolor=white:fontsize=26:x=w-mod(t*70\\,w+text_w):y=h-52",
-            _encoding.Encoder);
+            $"drawtext=textfile='{tickerFilter}':fontcolor=white:fontsize=26:x=w-mod(t*70\\,w+text_w):y=h-52";
 
         var args = new List<string>
         {
@@ -257,17 +272,28 @@ public sealed class NewsChannelService
         };
         args.AddRange(_encoding.HardwareDeviceArgs);
         args.AddRange(["-f", "lavfi", "-i", $"color=c=0x101010:s={width}x{height}:r=30"]);
-        AppendAudioBed(args, musicPath);
-
-        if (!string.IsNullOrWhiteSpace(speechPath) && File.Exists(speechPath))
+        var hasMusic = HasAudioFile(musicPath);
+        var hasSpeech = HasAudioFile(speechPath);
+        if (hasMusic || !hasSpeech)
         {
-            args.AddRange(["-i", speechPath]);
-            args.AddRange(["-filter_complex", $"[0:v]{vf}[vout];[1:a]volume=0.18[a1];[2:a]volume=1.0[a2];[a1][a2]amix=inputs=2:duration=first[aout]"]);
-            args.AddRange(["-map", "[vout]", "-map", "[aout]"]);
+            AppendAudioBed(args, musicPath);
+        }
+
+        if (hasSpeech)
+        {
+            args.AddRange(["-i", speechPath!]);
+            var audioGraph = hasMusic
+                ? "[1:a]volume=0.18[a1];[2:a]volume=1.0[a2];[a1][a2]amix=inputs=2:duration=first[aout]"
+                : "[1:a]volume=1.0[aout]";
+            var graph = _encoding.AdaptFilterComplexForEncoder($"[0:v]{vf}[vout];{audioGraph}", _encoding.Encoder);
+            args.AddRange(["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]"]);
         }
         else
         {
-            args.AddRange(["-vf", vf, "-map", "0:v", "-map", "1:a"]);
+            args.AddRange([
+                "-vf", _encoding.AdaptVideoFilterForEncoder(vf, _encoding.Encoder),
+                "-map", "0:v", "-map", "1:a"
+            ]);
         }
 
         _encoding.AppendVideoEncoder(args, stillImage: true);
@@ -337,5 +363,8 @@ public sealed class NewsChannelService
     }
 
     private static string EscapeDraw(string text)
-        => text.Replace("\\", "\\\\").Replace("'", "\\'").Replace(":", "\\:").Replace("%", "\\%");
+        => text.Replace("\\", "\\\\")
+            .Replace("'", "\u2019")
+            .Replace(":", "\\:")
+            .Replace("%", "\\%");
 }

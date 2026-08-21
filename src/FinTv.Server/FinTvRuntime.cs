@@ -15,7 +15,8 @@ public sealed class FinTvRuntime
     public FinTvRuntime(IServiceScopeFactory scopeFactory, IWebHostEnvironment env, IConfiguration config)
     {
         _scopeFactory = scopeFactory;
-        var configDir = config["FINTV_CONFIG"] ?? Path.Combine(env.ContentRootPath, "config");
+        var configDir = AppEnvironment.FromConfiguration(config, "CONFIG")
+            ?? Path.Combine(env.ContentRootPath, "config");
         DataFolder = configDir;
         LogosFolder = Path.Combine(configDir, "logos");
         EbsFolder = Path.Combine(configDir, "ebs");
@@ -62,6 +63,7 @@ public sealed class FinTvRuntime
         }
 
         EnsureApiKey();
+        _configuration.Transcode ??= new TranscodeSettings();
     }
 
     private void EnsureApiKey()

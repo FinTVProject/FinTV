@@ -4,12 +4,12 @@ using System.Text.Json.Serialization;
 namespace FinTv.Domain;
 
 /// <summary>
-/// Shared System.Text.Json settings for FinTV (case-insensitive property names).
+/// Shared System.Text.Json settings for ChannelFlow (case-insensitive property names).
 /// </summary>
 public static class FinTvJson
 {
     /// <summary>
-    /// Default serializer options for FinTV JSON read/write.
+    /// Default serializer options for ChannelFlow JSON read/write.
     /// </summary>
     public static JsonSerializerOptions Options { get; } = CreateOptions();
 

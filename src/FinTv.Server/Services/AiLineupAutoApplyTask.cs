@@ -21,7 +21,7 @@ public class AiLineupAutoApplyTask : IScheduledTask
 
     public string Name => "ChannelFlow-Server AI Lineup Auto-Apply (Channel Add)";
 
-    public string Key => "FinTVAiLineupAutoApply";
+    public string Key => "ChannelFlowAiLineupAutoApply";
 
     public string Description =>
         "Processes queued new-channel AI lineups and extends eligible channels by one day when the playout horizon drops to 13 days.";

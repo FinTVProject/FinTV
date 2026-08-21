@@ -183,7 +183,7 @@ public class CommercialBrainzSyncService
         Guid playlistId,
         CancellationToken cancellationToken = default)
     {
-        var runtime = FinTvRuntime.Current ?? throw new InvalidOperationException("FinTV is not initialized.");
+        var runtime = FinTvRuntime.Current ?? throw new InvalidOperationException("ChannelFlow is not initialized.");
         var playlist = runtime.Configuration.CommercialSearchPlaylists
             .FirstOrDefault(p => p.Id == playlistId)
             ?? throw new InvalidOperationException("Search playlist not found.");

@@ -100,7 +100,7 @@ public class FinTvListService
 
         if (await _db.FinTvLists.AnyAsync(l => l.JellyfinPlaylistId == dto.JellyfinPlaylistId, cancellationToken))
         {
-            throw new InvalidOperationException("This Jellyfin playlist is already registered as a FinTV list.");
+            throw new InvalidOperationException("This Jellyfin playlist is already registered as a ChannelFlow list.");
         }
 
         var entity = new FinTvList

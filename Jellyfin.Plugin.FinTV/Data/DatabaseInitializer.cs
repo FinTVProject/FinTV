@@ -35,7 +35,7 @@ public class DatabaseInitializer : IHostedService
             await db.SaveChangesAsync(cancellationToken);
         }
 
-        _logger.LogInformation("FinTV database initialized");
+        _logger.LogInformation("ChannelFlow database initialized");
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

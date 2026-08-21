@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FinTv.Api;
 
 /// <summary>
-/// Jellyfin library search helpers for the FinTV admin UI.
+/// Jellyfin library search helpers for the ChannelFlow admin UI.
 /// </summary>
 [ApiController]
 [Route("api/catalog")]
@@ -26,7 +26,7 @@ public class CatalogController : ControllerBase
     /// Initializes a new instance of the <see cref="CatalogController"/> class.
     /// </summary>
     /// <param name="libraryManager">Library manager.</param>
-    /// <param name="catalog">FinTV catalog service.</param>
+    /// <param name="catalog">ChannelFlow catalog service.</param>
     /// <param name="db">Database context.</param>
     public CatalogController(ILibraryManager libraryManager, JellyfinCatalogService catalog, FinTvDbContext db)
     {
@@ -242,7 +242,7 @@ public class CatalogController : ControllerBase
     }
 
     /// <summary>
-    /// Saves which Jellyfin libraries FinTV should use for TV, movies, music, and music videos.
+    /// Saves which Jellyfin libraries ChannelFlow should use for TV, movies, music, and music videos.
     /// </summary>
     [HttpPut("libraries")]
     public IActionResult UpdateLibraries([FromBody] JellyfinLibrarySettingsRequest? request)

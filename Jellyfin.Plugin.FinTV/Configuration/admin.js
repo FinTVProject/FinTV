@@ -391,7 +391,7 @@
 
     function api(path, options) {
         options = options || {};
-        const url = resolveUrl('FinTV/api' + (path.startsWith('/') ? path : '/' + path));
+        const url = resolveUrl('ChannelFlow/api' + (path.startsWith('/') ? path : '/' + path));
         const method = options.method || 'GET';
         const body = options.body == null
             ? undefined
@@ -461,7 +461,7 @@
     }
 
     async function apiForm(path, formData, method) {
-        const url = resolveUrl('FinTV/api' + (path.startsWith('/') ? path : '/' + path));
+        const url = resolveUrl('ChannelFlow/api' + (path.startsWith('/') ? path : '/' + path));
         const httpMethod = method || 'POST';
 
         if (typeof ApiClient !== 'undefined' && typeof ApiClient.ajax === 'function') {
@@ -959,7 +959,7 @@
         e.preventDefault();
         syncConfigPageFromEvent(e);
         if (!configPage) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow admin page is not ready. Close and reopen ChannelFlow settings.', 'error');
             return;
         }
 
@@ -1284,7 +1284,7 @@
                     <option value="0">Jellyfin item</option>
                     <option value="1">Collection name</option>
                     <option value="2">Filter JSON</option>
-                    <option value="3">FinTV list</option>
+                    <option value="3">ChannelFlow list</option>
                 </select>
             </div>
             <div id="slot-add-panel"></div>`;
@@ -1327,7 +1327,7 @@
                 };
             } else if (kind === 3) {
                 ensureFinTvLists().then((lists) => {
-                    panel.innerHTML = `<label class="field"><span>FinTV list</span>
+                    panel.innerHTML = `<label class="field"><span>ChannelFlow list</span>
                         <select id="slot-list-id" class="emby-select">
                             ${lists.map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('')}
                         </select></label>
@@ -1710,7 +1710,7 @@
                 const youtubeId = item.youtubeVideoId || item.youTubeVideoId || item.YouTubeVideoId || '';
                 const pageUrl = item.commercialPageUrl || item.CommercialPageUrl || '';
                 const thumb = youtubeId
-                    ? resolveUrl('FinTV/api/commercials/brainz/thumbnail/' + encodeURIComponent(youtubeId))
+                    ? resolveUrl('ChannelFlow/api/commercials/brainz/thumbnail/' + encodeURIComponent(youtubeId))
                     : (item.thumbnailUrl || item.ThumbnailUrl || '');
                 const meta = [brand, year, duration].filter((part) => part !== '' && part != null).join(' · ');
                 const thumbHtml = thumb
@@ -1739,7 +1739,7 @@
 
     async function saveBrainzSettings(options = {}) {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow admin page is not ready. Close and reopen ChannelFlow settings.', 'error');
             return;
         }
 
@@ -2126,7 +2126,7 @@
 
     async function applyPresets() {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow admin page is not ready. Close and reopen ChannelFlow settings.', 'error');
             return;
         }
 
@@ -2686,7 +2686,7 @@
 
     async function saveAiSettings() {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow admin page is not ready. Close and reopen ChannelFlow settings.', 'error');
             return;
         }
 
@@ -2751,7 +2751,7 @@
 
     async function testAiConnection() {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow admin page is not ready. Close and reopen ChannelFlow settings.', 'error');
             return;
         }
 
@@ -2785,7 +2785,7 @@
 
     async function saveAiChannelSettings(channelId) {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow admin page is not ready. Close and reopen ChannelFlow settings.', 'error');
             return;
         }
 
@@ -2831,7 +2831,7 @@
 
     async function generateAiLineup(channelId) {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow admin page is not ready. Close and reopen ChannelFlow settings.', 'error');
             return;
         }
 
@@ -3234,7 +3234,7 @@
 
     async function saveGeneralSettings() {
         if (!syncConfigPage()) {
-            toast('FinTV admin page is not ready. Close and reopen FinTV settings.', 'error');
+            toast('ChannelFlow admin page is not ready. Close and reopen ChannelFlow settings.', 'error');
             return;
         }
 
@@ -3292,19 +3292,19 @@
             return null;
         }
 
-        if (node.id === 'FinTVConfigPage') {
+        if (node.id === 'ChannelFlowConfigPage') {
             return node;
         }
 
         if (typeof node.querySelector === 'function') {
-            const nested = node.querySelector('#FinTVConfigPage');
+            const nested = node.querySelector('#ChannelFlowConfigPage');
             if (nested) {
                 return nested;
             }
         }
 
         if (typeof node.closest === 'function') {
-            return node.closest('#FinTVConfigPage');
+            return node.closest('#ChannelFlowConfigPage');
         }
 
         return null;
@@ -3324,14 +3324,14 @@
             await ensureFinTvLists(true);
             renderListsTable();
         } catch (err) {
-            reportApiError(err, 'Could not load FinTV lists.');
+            reportApiError(err, 'Could not load ChannelFlow lists.');
         }
     }
 
     function renderListsTable() {
         const el = $('lists-table');
         if (!finTvLists.length) {
-            el.innerHTML = '<div class="empty-state">No FinTV lists registered yet. Add a Jellyfin playlist to use it in lineups.</div>';
+            el.innerHTML = '<div class="empty-state">No ChannelFlow lists registered yet. Add a Jellyfin playlist to use it in lineups.</div>';
             return;
         }
 
@@ -3388,7 +3388,7 @@
                    <option value="1">Random</option>
                  </select></label>`;
 
-        openModal(existing ? 'Edit FinTV List' : 'Add FinTV List', body, `
+        openModal(existing ? 'Edit ChannelFlow List' : 'Add ChannelFlow List', body, `
             <button type="button" class="emby-button" id="list-cancel">Cancel</button>
             <button type="button" class="raised button-submit emby-button" id="list-save">Save</button>`);
 
@@ -3424,7 +3424,7 @@
     }
 
     async function deleteList(id) {
-        if (!confirm('Remove this FinTV list registration?')) return;
+        if (!confirm('Remove this ChannelFlow list registration?')) return;
         try {
             await api('/lists/' + id, { method: 'DELETE' });
             toast('List removed.', 'success');
@@ -3539,7 +3539,7 @@
 
         const body = `
             <label class="field"><span>Name</span><input id="sp-name" class="emby-input" value="${escapeHtml(draft.name || '')}"></label>
-            <label class="field checkbox-field"><input id="sp-enabled" type="checkbox"${draft.enabled !== false ? ' checked' : ''}><span class="fintv-check-box" aria-hidden="true"></span><span>Enabled</span></label>
+            <label class="field checkbox-field"><input id="sp-enabled" type="checkbox"${draft.enabled !== false ? ' checked' : ''}><span class="channelflow-check-box" aria-hidden="true"></span><span>Enabled</span></label>
             <label class="field"><span>Day of week</span>
                 <select id="sp-day" class="emby-select">${DAYS.map((d, i) =>
                     `<option value="${i}"${draft.dayOfWeek === i ? ' selected' : ''}>${d}</option>`).join('')}</select></label>
@@ -3549,7 +3549,7 @@
                 <select id="sp-content-mode" class="emby-select">
                     <option value="0">Fixed items</option>
                     <option value="1">Rule-based</option>
-                    <option value="2">FinTV list</option>
+                    <option value="2">ChannelFlow list</option>
                 </select></label>
             <div id="sp-content-panel"></div>`;
 
@@ -3582,7 +3582,7 @@
             }
 
             if (mode === 2) {
-                panel.innerHTML = `<label class="field"><span>FinTV list</span>
+                panel.innerHTML = `<label class="field"><span>ChannelFlow list</span>
                     <select id="sp-list-id" class="emby-select">
                         ${finTvLists.map((l) => `<option value="${l.id}"${draft.candidates[0]?.finTvListId === l.id ? ' selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
                     </select></label>`;
@@ -3643,7 +3643,7 @@
             } else if (mode === 2) {
                 const listId = document.getElementById('sp-list-id').value;
                 if (!listId) {
-                    toast('Select a FinTV list.', 'error');
+                    toast('Select a ChannelFlow list.', 'error');
                     return;
                 }
                 candidates = [{ kind: 3, finTvListId: listId, weight: 1, sortOrder: 0 }];
@@ -3706,7 +3706,7 @@
             return;
         }
 
-        qa('.fintv-tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+        qa('.channelflow-tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
         qa('.tab-panel').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
         stopOnAirPolling();
         if (name === 'channels') startOnAirPolling();
@@ -3752,7 +3752,7 @@
 
     function decorateCheckboxes() {
         qa('.checkbox-field').forEach((label) => {
-            if (label.querySelector('.fintv-check-box')) {
+            if (label.querySelector('.channelflow-check-box')) {
                 return;
             }
 
@@ -3762,7 +3762,7 @@
             }
 
             const box = document.createElement('span');
-            box.className = 'fintv-check-box';
+            box.className = 'channelflow-check-box';
             box.setAttribute('aria-hidden', 'true');
             input.insertAdjacentElement('afterend', box);
         });
@@ -3789,7 +3789,7 @@
             }
         }
 
-        qa('.fintv-tabs .tab').forEach((tab) => tab.onclick = () => switchTab(tab.dataset.tab));
+        qa('.channelflow-tabs .tab').forEach((tab) => tab.onclick = () => switchTab(tab.dataset.tab));
         click('btn-new-channel', () => openNewChannelForm());
         click('btn-close-channel', () => showChannelForm(false));
         click('btn-cancel-channel', () => showChannelForm(false));
@@ -3891,7 +3891,7 @@
 
         bindEvents();
         startOnAirPolling();
-        return refresh().catch((err) => reportApiError(err, 'Could not load FinTV admin.'));
+        return refresh().catch((err) => reportApiError(err, 'Could not load ChannelFlow admin.'));
     }
 
     function resolveConfigPage(preferred) {
@@ -3901,7 +3901,7 @@
             return preferred;
         }
 
-        const pages = document.querySelectorAll('#FinTVConfigPage');
+        const pages = document.querySelectorAll('#ChannelFlowConfigPage');
         for (let i = pages.length - 1; i >= 0; i--) {
             if (isActiveConfigPage(pages[i])) {
                 return pages[i];
@@ -3915,31 +3915,31 @@
         return pages.length ? pages[pages.length - 1] : null;
     }
 
-    function bootFinTvAdmin(page) {
+    function bootChannelFlowAdmin(page) {
         page = resolveConfigPage(page);
-        if (!page || !window.FinTV || !window.FinTV.init) {
+        if (!page || !window.ChannelFlow || !window.ChannelFlow.init) {
             return false;
         }
 
-        window.FinTV.init(page);
+        window.ChannelFlow.init(page);
         return true;
     }
 
-    window.FinTV = { init, refresh, loadChannels, loadSetup, bootFinTvAdmin };
+    window.ChannelFlow = { init, refresh, loadChannels, loadSetup, bootChannelFlowAdmin };
 })();
 
 export default function (view) {
     function boot() {
-        if (window.FinTV && window.FinTV.bootFinTvAdmin) {
-            window.FinTV.bootFinTvAdmin(view);
+        if (window.ChannelFlow && window.ChannelFlow.bootChannelFlowAdmin) {
+            window.ChannelFlow.bootChannelFlowAdmin(view);
         }
     }
 
     view.addEventListener('viewshow', boot);
     view.addEventListener('viewdestroy', function () {
-        delete view.dataset.fintvBound;
-        document.querySelectorAll('#FinTVConfigPage').forEach((page) => {
-            delete page.dataset.fintvBound;
+        delete view.dataset.channelflowBound;
+        document.querySelectorAll('#ChannelFlowConfigPage').forEach((page) => {
+            delete page.dataset.channelflowBound;
         });
     });
     boot();

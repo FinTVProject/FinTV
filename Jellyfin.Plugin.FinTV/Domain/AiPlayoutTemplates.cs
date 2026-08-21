@@ -268,7 +268,7 @@ public static class AiPlayoutTemplates
         if (template.Id is "movie-marathon" or "holiday-channel")
         {
             lines.Add("- Pack titles back-to-back from slot 0 with zero empty slots between features.");
-            lines.Add("- FinTV repacks movies first in release chronological order (earliest year/date first), then other catalog items.");
+            lines.Add("- ChannelFlow repacks movies first in release chronological order (earliest year/date first), then other catalog items.");
         }
         else if (template.Id is not "past-tense-news")
         {
@@ -293,7 +293,7 @@ public static class AiPlayoutTemplates
         return string.Join('\n', new[]
         {
             "Series episode blocking:",
-            "- For TV series, use consecutive slots with the same jellyfinItemId; FinTV plays the next episode in order for each consecutive slot.",
+            "- For TV series, use consecutive slots with the same jellyfinItemId; ChannelFlow plays the next episode in order for each consecutive slot.",
             "- Typical blocks: 1-4 consecutive episodes of the same series (1-4 back-to-back slots with the same jellyfinItemId). Use spanSlots=1 per slot for ~30-minute episodes, or spanSlots=2 for hour-long episodes.",
             "- Mini-marathon: include exactly ONE mini-marathon per lineup — 5-6 consecutive slots (max 6 episodes) of the same series. " + marathonSlots,
             "- Keep mini-marathons rare and special (about 1-2 per week channel-wide). On this daily template include one; use lineup overrides on other weekdays if you want a second weekly marathon or none.",

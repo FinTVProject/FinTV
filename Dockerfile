@@ -36,8 +36,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=build /app/publish .
 
-ENV FINTV_CONFIG=/config \
+ENV CHANNELFLOW_CONFIG=/config \
+    FINTV_CONFIG=/config \
     FFMPEG_PATH=/usr/bin/ffmpeg \
+    CHANNELFLOW_YTDLP_PATH=/usr/local/bin/yt-dlp \
     FINTV_YTDLP_PATH=/usr/local/bin/yt-dlp \
     FFMPEG_HWACCEL=vaapi \
     FFMPEG_VAAPI_DEVICE=/dev/dri/renderD128 \

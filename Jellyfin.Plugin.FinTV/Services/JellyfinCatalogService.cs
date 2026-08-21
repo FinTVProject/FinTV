@@ -849,7 +849,7 @@ public class JellyfinCatalogService
     private static bool IsPastTenseNewsChannel(Channel channel)
         => string.Equals(
             ChannelAiRules.ExtractLibraryTag(channel.FilterJson),
-            "fintv-past-tense-news",
+            "channelflow-past-tense-news",
             StringComparison.OrdinalIgnoreCase);
 
     private CollectionFolder? ResolveLibraryFolder(string libraryName)

@@ -7,10 +7,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jellyfin.Plugin.FinTV.Api;
 
 /// <summary>
-/// General FinTV plugin settings for the admin UI.
+/// General ChannelFlow plugin settings for the admin UI.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/general")]
+[Route("ChannelFlow/api/general")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class GeneralController : ControllerBase
 {
@@ -122,7 +122,7 @@ public class GeneralController : ControllerBase
 public class GeneralSettingsRequest
 {
     /// <summary>
-    /// Gets or sets whether verbose FinTV debug logging is enabled.
+    /// Gets or sets whether verbose ChannelFlow debug logging is enabled.
     /// </summary>
     public bool? DebugLogging { get; set; }
 

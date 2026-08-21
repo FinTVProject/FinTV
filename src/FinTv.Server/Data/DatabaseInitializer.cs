@@ -58,6 +58,8 @@ public class DatabaseInitializer : IHostedService
         var runtime = scope.ServiceProvider.GetRequiredService<FinTvRuntime>();
         await runtime.LoadAsync(cancellationToken);
         FinTvRuntime.Current = runtime;
+        scope.ServiceProvider.GetRequiredService<FinTv.Streaming.FfmpegEncodingService>()
+            .ApplyFromSaved(runtime.Configuration.Transcode);
 
         _logger.LogInformation("ChannelFlow-Server database initialized");
     }

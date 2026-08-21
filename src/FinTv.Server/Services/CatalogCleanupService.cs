@@ -57,14 +57,14 @@ public sealed class CatalogCleanupService
 
     public void BeginCatalogSync()
     {
-        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("FinTV is not initialized.");
+        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("ChannelFlow is not initialized.");
         plugin.Configuration.CatalogCleanup.LastCatalogSyncStartedAt = DateTime.UtcNow;
         plugin.SaveConfiguration();
     }
 
     public async Task<int> CompleteCatalogSyncAsync(CancellationToken cancellationToken)
     {
-        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("FinTV is not initialized.");
+        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("ChannelFlow is not initialized.");
         var settings = plugin.Configuration.CatalogCleanup;
         var cutoff = settings.LastCatalogSyncStartedAt;
         if (cutoff is null || cutoff < DateTime.UtcNow.AddHours(-12))
@@ -125,7 +125,7 @@ public sealed class CatalogCleanupService
 
     public async Task<CatalogCleanupRunResult> RunAsync(CancellationToken cancellationToken)
     {
-        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("FinTV is not initialized.");
+        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("ChannelFlow is not initialized.");
         var settings = plugin.Configuration.CatalogCleanup;
         var state = settings.TaskState;
         if (state.IsRunning)
@@ -185,7 +185,7 @@ public sealed class CatalogCleanupService
 
     public async Task<CatalogLocalScanResult> ScanLocalFilesAsync(CancellationToken cancellationToken, bool nested = false)
     {
-        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("FinTV is not initialized.");
+        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("ChannelFlow is not initialized.");
         var settings = plugin.Configuration.CatalogCleanup;
         var scan = settings.LocalScan;
         if (!nested && (scan.IsRunning || settings.TaskState.IsRunning))

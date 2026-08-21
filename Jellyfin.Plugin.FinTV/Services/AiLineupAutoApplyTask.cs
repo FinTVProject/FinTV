@@ -19,14 +19,14 @@ public class AiLineupAutoApplyTask : IScheduledTask
         _logger = logger;
     }
 
-    public string Name => "FinTV AI Lineup Auto-Apply (Channel Add)";
+    public string Name => "ChannelFlow AI Lineup Auto-Apply (Channel Add)";
 
     public string Key => "FinTVAiLineupAutoApply";
 
     public string Description =>
         "Processes queued new-channel AI lineups and extends eligible channels by one day when the playout horizon drops to 13 days.";
 
-    public string Category => "FinTV";
+    public string Category => "ChannelFlow";
 
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
     {
@@ -42,7 +42,7 @@ public class AiLineupAutoApplyTask : IScheduledTask
         var settings = Plugin.Instance?.Configuration.Ai ?? new AiSettings();
         if (!settings.Enabled)
         {
-            _logger.LogInformation("FinTV AI lineup auto-apply skipped because AI is disabled.");
+            _logger.LogInformation("ChannelFlow AI lineup auto-apply skipped because AI is disabled.");
             progress.Report(100);
             return;
         }
@@ -62,7 +62,7 @@ public class AiLineupAutoApplyTask : IScheduledTask
 
         progress.Report(100);
         _logger.LogInformation(
-            "FinTV AI lineup task finished: {Processed} queued channel(s), {Extended} horizon extension(s).",
+            "ChannelFlow AI lineup task finished: {Processed} queued channel(s), {Extended} horizon extension(s).",
             processed,
             extended);
     }

@@ -54,7 +54,7 @@ public class AiController : ControllerBase
             return BadRequest(new { message = "Request body is required." });
         }
 
-        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("FinTV plugin not initialized.");
+        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("ChannelFlow plugin not initialized.");
         var ai = plugin.Configuration.Ai;
 
         if (request.Enabled.HasValue)
@@ -140,7 +140,7 @@ public class AiController : ControllerBase
     [HttpPost("settings/test")]
     public async Task<IActionResult> TestSettings([FromBody] AiTestSettingsRequest? request, CancellationToken cancellationToken)
     {
-        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("FinTV plugin not initialized.");
+        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("ChannelFlow plugin not initialized.");
         var provider = ResolveTestProvider(request, plugin.Configuration.Ai);
 
         try

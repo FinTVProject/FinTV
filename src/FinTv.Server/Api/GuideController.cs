@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FinTv.Api;
 
 /// <summary>
-/// JSON TV guide for the FinTV Web UI.
+/// JSON TV guide for the ChannelFlow Web UI.
 /// </summary>
 [ApiController]
 [Route("api/guide")]

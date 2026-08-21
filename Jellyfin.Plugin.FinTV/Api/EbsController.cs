@@ -12,7 +12,7 @@ namespace Jellyfin.Plugin.FinTV.Api;
 /// Emergency Broadcast System settings and custom slate uploads.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/ebs")]
+[Route("ChannelFlow/api/ebs")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class EbsController : ControllerBase
 {

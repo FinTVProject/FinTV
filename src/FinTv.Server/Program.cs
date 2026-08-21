@@ -12,7 +12,8 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("FinTV")
+var connectionString = builder.Configuration.GetConnectionString("ChannelFlow")
+    ?? builder.Configuration.GetConnectionString("FinTV")
     ?? BuildPostgresConnectionString();
 
 builder.AddReverseProxySupport();
@@ -29,7 +30,7 @@ builder.Services.AddControllers()
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
-        options.Cookie.Name = "fintv.auth";
+        options.Cookie.Name = "channelflow.auth";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;

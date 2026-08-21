@@ -20,7 +20,7 @@ public sealed class CatalogCleanupTask : IScheduledTask
 
     public string Name => "ChannelFlow-Server Catalog Cleanup";
 
-    public string Key => "FinTVCatalogCleanup";
+    public string Key => "ChannelFlowCatalogCleanup";
 
     public string Description =>
         "Marks catalog items missing when Jellyfin no longer reports them or their remapped local file is gone, then deletes them after the configured grace period.";

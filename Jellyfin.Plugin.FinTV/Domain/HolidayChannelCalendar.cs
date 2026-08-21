@@ -5,11 +5,11 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
 
 /// <summary>
-/// Seasonal windows and theme matching for The Holiday Channel (fintv-holiday).
+/// Seasonal windows and theme matching for The Holiday Channel (channelflow-holiday).
 /// </summary>
 public static class HolidayChannelCalendar
 {
-    public const string LibraryTag = "fintv-holiday";
+    public const string LibraryTag = "channelflow-holiday";
 
     public const string OffSeasonLogoRelativePath = "The Holiday Channel/The Holiday Channel-plane.png";
 
@@ -83,7 +83,7 @@ public static class HolidayChannelCalendar
     public static IReadOnlyList<HolidayDefinition> All => Holidays;
 
     public static bool IsHolidayChannel(Channel channel)
-        => string.Equals(ChannelAiRules.ExtractLibraryTag(channel.FilterJson), LibraryTag, StringComparison.OrdinalIgnoreCase);
+        => FilterDefinition.PresetIdsEqual(ChannelAiRules.ExtractLibraryTag(channel.FilterJson), LibraryTag);
 
     public static HolidayDefinition? GetActiveHoliday(DateOnly date)
     {

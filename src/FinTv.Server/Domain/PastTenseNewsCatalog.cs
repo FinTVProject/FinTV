@@ -5,10 +5,10 @@ namespace FinTv.Domain;
 /// </summary>
 public static class PastTenseNewsCatalog
 {
-    public const string ChannelTag = "fintv-past-tense-news";
+    public const string ChannelTag = "channelflow-past-tense-news";
 
     public static bool IsPastTenseNewsChannel(Channel channel)
-        => string.Equals(ChannelAiRules.ExtractLibraryTag(channel.FilterJson), ChannelTag, StringComparison.OrdinalIgnoreCase);
+        => FilterDefinition.PresetIdsEqual(ChannelAiRules.ExtractLibraryTag(channel.FilterJson), ChannelTag);
 
     public static bool MatchesLibraryName(string? name)
     {

@@ -12,7 +12,7 @@ namespace Jellyfin.Plugin.FinTV.Api;
 /// Setup helper endpoints for Jellyfin Live TV integration.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/setup")]
+[Route("ChannelFlow/api/setup")]
 public class SetupController : ControllerBase
 {
     private readonly IServerApplicationHost _appHost;
@@ -48,7 +48,7 @@ public class SetupController : ControllerBase
     }
 
     /// <summary>
-    /// Gets FinTV setup settings for the admin UI.
+    /// Gets ChannelFlow setup settings for the admin UI.
     /// </summary>
     /// <returns>Setup settings.</returns>
     [HttpGet("settings")]
@@ -77,7 +77,7 @@ public class SetupController : ControllerBase
     }
 
     /// <summary>
-    /// Updates FinTV setup settings and returns refreshed Live TV URLs.
+    /// Updates ChannelFlow setup settings and returns refreshed Live TV URLs.
     /// </summary>
     /// <param name="request">Setup settings.</param>
     /// <returns>Updated setup URLs.</returns>
@@ -154,8 +154,8 @@ public class SetupController : ControllerBase
         return new
         {
             baseUrl,
-            m3u = $"{baseUrl}/FinTV/iptv/channels.m3u",
-            epg = $"{baseUrl}/FinTV/iptv/epg.xml",
+            m3u = $"{baseUrl}/ChannelFlow/iptv/channels.m3u",
+            epg = $"{baseUrl}/ChannelFlow/iptv/epg.xml",
             instructions = new[]
             {
                 "Dashboard → Live TV → Add Tuner → M3U Tuner",
@@ -203,7 +203,7 @@ public class SetupSettingsRequest
     public string? WeatherStarPermalinkQuery { get; set; }
 
     /// <summary>
-    /// Gets or sets a full WeatherStar permalink; FinTV splits it into base URL and display settings.
+    /// Gets or sets a full WeatherStar permalink; ChannelFlow splits it into base URL and display settings.
     /// </summary>
     public string? WeatherStarFullPermalink { get; set; }
 
@@ -224,10 +224,10 @@ public class SetupSettingsRequest
 }
 
 /// <summary>
-/// Background task endpoints for FinTV maintenance.
+/// Background task endpoints for ChannelFlow maintenance.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/tasks")]
+[Route("ChannelFlow/api/tasks")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class TasksController : ControllerBase
 {

@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.FinTV.Api;
 /// </summary>
 [ApiController]
 [AllowAnonymous]
-[Route("FinTV/iptv")]
+[Route("ChannelFlow/iptv")]
 public class IptvController : ControllerBase
 {
     private readonly EpgService _epg;

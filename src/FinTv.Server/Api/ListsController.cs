@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FinTv.Api;
 
 /// <summary>
-/// FinTV list registry backed by Jellyfin playlists.
+/// ChannelFlow list registry backed by Jellyfin playlists.
 /// </summary>
 [ApiController]
 [Route("api/lists")]

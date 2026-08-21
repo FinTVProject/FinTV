@@ -11,55 +11,55 @@ public static class ChannelAiRules
 {
     private static readonly Dictionary<string, ChannelAiRuleDefinition> Rules = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["fintv-flashback"] = new(
+        ["channelflow-flashback"] = new(
             "TV series and movies released from 1970 through 2010 only. For TV series, eligibility uses the first episode premiere year in that range. Exclude crime, cops, and game shows.",
             ChannelCatalogMode.Mixed),
-        ["fintv-retro"] = new(
+        ["channelflow-retro"] = new(
             "TV series and movies released from 1910 through 1969 only. For TV series, eligibility uses the first episode premiere year in that range. Exclude crime, cops, and game shows.",
             ChannelCatalogMode.Mixed),
-        ["fintv-open-swim"] = new(
+        ["channelflow-open-swim"] = new(
             "Kids and teen TV and movies from any release year (no year cap). Only kid-rated content up to TV-PG. Prioritize Nickelodeon, Disney Channel, Fox Kids, and Cartoon Network style cartoons and live-action kids shows from any era. Exclude horror, crime, war, and adult thriller genres.",
             ChannelCatalogMode.Mixed),
-        ["fintv-reality"] = new(
+        ["channelflow-reality"] = new(
             "Reality TV themed shows and movies. Match Reality genre or reality/competition keywords in title, plot, or tags. Exclude crime, cops, and game shows.",
             ChannelCatalogMode.Mixed),
-        ["fintv-news"] = new("News programming only (News genre preferred).", ChannelCatalogMode.TvOnly),
-        ["fintv-past-tense-news"] = new(
+        ["channelflow-news"] = new("News programming only (News genre preferred).", ChannelCatalogMode.TvOnly),
+        ["channelflow-past-tense-news"] = new(
             "Home movies and home videos (Jellyfin Home Movies / Home Videos / Past Tense News libraries). Schedule clips in chronological order of the events they cover and treat each story as breaking live news.",
             ChannelCatalogMode.Mixed),
-        ["fintv-crime"] = new(
+        ["channelflow-crime"] = new(
             "Crime and cop themed TV shows and movies. Match Crime/Cop/Police/Detective genres or crime-related plot/overview text. Exclude animated comedies, game shows, and spy-comedy series that only mention CIA/FBI without crime themes.",
             ChannelCatalogMode.Mixed),
-        ["fintv-comedy"] = new(
+        ["channelflow-comedy"] = new(
             "Comedy themed TV shows and movies. Match Comedy genre or comedy keywords in title, plot, or tags. Build Slappy's Toon Takeover at 6pm (slots 36-41).",
             ChannelCatalogMode.Mixed),
-        ["fintv-game-shows"] = new("Game shows only.", ChannelCatalogMode.Mixed),
-        ["fintv-education"] = new("Educational TV and documentaries (History, Discovery, science, nature).", ChannelCatalogMode.Mixed),
-        ["fintv-youtube"] = new("Only content from the Jellyfin TV library named YouTube.", ChannelCatalogMode.TvOnly),
-        ["fintv-creature"] = new(
+        ["channelflow-game-shows"] = new("Game shows only.", ChannelCatalogMode.Mixed),
+        ["channelflow-education"] = new("Educational TV and documentaries (History, Discovery, science, nature).", ChannelCatalogMode.Mixed),
+        ["channelflow-youtube"] = new("Only content from the Jellyfin TV library named YouTube.", ChannelCatalogMode.TvOnly),
+        ["channelflow-creature"] = new(
             "Creature and monster movies and TV. Match Horror/Sci-Fi/Monster genres or creature/monster keywords in title, plot, and tags.",
             ChannelCatalogMode.Mixed),
-        ["fintv-hero"] = new(
+        ["channelflow-hero"] = new(
             "Hero-themed movies and TV about anyone who saves or protects people — superheroes, first responders, doctors, rescuers, soldiers, and everyday heroes. Prefer uplifting stories of courage and rescue. Match relevant genres or save/rescue/hero keywords in title, plot, and tags.",
             ChannelCatalogMode.Mixed),
-        ["fintv-funny"] = new("Comedian-led movies and TV.", ChannelCatalogMode.Mixed),
-        ["fintv-holiday"] = new(
+        ["channelflow-funny"] = new("Comedian-led movies and TV.", ChannelCatalogMode.Mixed),
+        ["channelflow-holiday"] = new(
             "Seasonal holiday channel. Only play TV and movies themed to the active holiday window (up to 30 days before the observance). Match content using Jellyfin tags, plot/overview text, title keywords, and release/premiere month. When no holiday window is active the channel is off-season. Build cable-style marathons that loop smartly.",
             ChannelCatalogMode.Mixed),
-        ["fintv-parody"] = new("Parody music videos; use fine-tune keywords or artists.", ChannelCatalogMode.MusicVideoOnly),
-        ["fintv-rap"] = new("Rap and hip hop music videos; use fine-tune keywords or artists.", ChannelCatalogMode.MusicVideoOnly),
-        ["fintv-music-video"] = new("General music videos; use fine-tune keywords or artists.", ChannelCatalogMode.MusicVideoOnly),
+        ["channelflow-parody"] = new("Parody music videos; use fine-tune keywords or artists.", ChannelCatalogMode.MusicVideoOnly),
+        ["channelflow-rap"] = new("Rap and hip hop music videos; use fine-tune keywords or artists.", ChannelCatalogMode.MusicVideoOnly),
+        ["channelflow-music-video"] = new("General music videos; use fine-tune keywords or artists.", ChannelCatalogMode.MusicVideoOnly),
     };
 
     private static readonly Dictionary<string, ChannelCatalogYearConstraints> YearConstraints = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["fintv-flashback"] = new ChannelCatalogYearConstraints
+        ["channelflow-flashback"] = new ChannelCatalogYearConstraints
         {
             MinYear = 1970,
             MaxYear = 2010,
             UseFirstEpisodeYearForSeries = true
         },
-        ["fintv-retro"] = new ChannelCatalogYearConstraints
+        ["channelflow-retro"] = new ChannelCatalogYearConstraints
         {
             MinYear = 1910,
             MaxYear = 1969,
@@ -69,15 +69,15 @@ public static class ChannelAiRules
 
     private static readonly Dictionary<string, ChannelCatalogGenreConstraints> GenreConstraints = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["fintv-flashback"] = new ChannelCatalogGenreConstraints
+        ["channelflow-flashback"] = new ChannelCatalogGenreConstraints
         {
             ExcludedGenreKeywords = new[] { "Crime", "Cop", "Police", "Detective", "Game Show", "Game-Show", "GameShow" }
         },
-        ["fintv-retro"] = new ChannelCatalogGenreConstraints
+        ["channelflow-retro"] = new ChannelCatalogGenreConstraints
         {
             ExcludedGenreKeywords = new[] { "Crime", "Cop", "Police", "Detective", "Game Show", "Game-Show", "GameShow" }
         },
-        ["fintv-open-swim"] = new ChannelCatalogGenreConstraints
+        ["channelflow-open-swim"] = new ChannelCatalogGenreConstraints
         {
             RequiredGenreKeywords = new[] { "Kids", "Family", "Children", "Animation", "Animated", "Cartoon", "Preschool" },
             RequiredPlotKeywords = new[]
@@ -96,7 +96,7 @@ public static class ChannelAiRules
             },
             ExcludedGenreKeywords = new[] { "Horror", "Thriller", "Crime", "War" }
         },
-        ["fintv-reality"] = new ChannelCatalogGenreConstraints
+        ["channelflow-reality"] = new ChannelCatalogGenreConstraints
         {
             RequiredGenreKeywords = new[] { "Reality" },
             RequiredPlotKeywords = new[]
@@ -110,7 +110,7 @@ public static class ChannelAiRules
             },
             ExcludedGenreKeywords = new[] { "Crime", "Cop", "Police", "Game Show", "Game-Show", "GameShow" }
         },
-        ["fintv-crime"] = new ChannelCatalogGenreConstraints
+        ["channelflow-crime"] = new ChannelCatalogGenreConstraints
         {
             RequiredGenreKeywords = new[] { "Crime", "Cop", "Police", "Detective" },
             RequiredPlotKeywords = new[]
@@ -131,7 +131,7 @@ public static class ChannelAiRules
                 "Animation", "Animated", "Cartoon", "Anime"
             }
         },
-        ["fintv-comedy"] = new ChannelCatalogGenreConstraints
+        ["channelflow-comedy"] = new ChannelCatalogGenreConstraints
         {
             RequiredGenreKeywords = new[] { "Comedy" },
             RequiredPlotKeywords = new[]
@@ -141,7 +141,7 @@ public static class ChannelAiRules
                 "satire", "slapstick", "rom-com", "romcom"
             }
         },
-        ["fintv-funny"] = new ChannelCatalogGenreConstraints
+        ["channelflow-funny"] = new ChannelCatalogGenreConstraints
         {
             RequiredGenreKeywords = new[] { "Comedy" },
             RequiredPlotKeywords = new[]
@@ -150,7 +150,7 @@ public static class ChannelAiRules
                 "sketch comedy", "late night", "funny", "humor", "humour"
             }
         },
-        ["fintv-game-shows"] = new ChannelCatalogGenreConstraints
+        ["channelflow-game-shows"] = new ChannelCatalogGenreConstraints
         {
             RequiredGenreKeywords = new[] { "Game Show", "Game-Show", "GameShow", "Quiz", "Trivia" },
             RequiredPlotKeywords = new[]
@@ -161,7 +161,7 @@ public static class ChannelAiRules
                 "who wants to be", "are you smarter", "press your luck", "hollywood squares"
             }
         },
-        ["fintv-education"] = new ChannelCatalogGenreConstraints
+        ["channelflow-education"] = new ChannelCatalogGenreConstraints
         {
             RequiredGenreKeywords = new[] { "Documentary", "Educational", "Education", "History", "Science", "Nature" },
             RequiredPlotKeywords = new[]
@@ -172,7 +172,7 @@ public static class ChannelAiRules
                 "how it works", "engineering", "technology", "invention", "ancient"
             }
         },
-        ["fintv-creature"] = new ChannelCatalogGenreConstraints
+        ["channelflow-creature"] = new ChannelCatalogGenreConstraints
         {
             RequiredGenreKeywords = new[] { "Horror", "Sci-Fi", "Science Fiction", "Monster", "Creature", "Thriller", "Fantasy" },
             RequiredPlotKeywords = new[]
@@ -185,7 +185,7 @@ public static class ChannelAiRules
                 "king kong", "gill-man", "swamp thing", "loch ness", "yeti", "reanimated"
             }
         },
-        ["fintv-hero"] = new ChannelCatalogGenreConstraints
+        ["channelflow-hero"] = new ChannelCatalogGenreConstraints
         {
             RequiredGenreKeywords = new[]
             {
@@ -206,7 +206,7 @@ public static class ChannelAiRules
                 "unsung hero", "everyday hero", "disaster relief", "against all odds"
             }
         },
-        ["fintv-news"] = new ChannelCatalogGenreConstraints
+        ["channelflow-news"] = new ChannelCatalogGenreConstraints
         {
             RequiredGenreKeywords = new[] { "News", "Newscast", "Journalism" }
         }
@@ -214,12 +214,12 @@ public static class ChannelAiRules
 
     private static readonly Dictionary<string, ChannelCatalogLibraryConstraints> LibraryConstraints = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["fintv-past-tense-news"] = new ChannelCatalogLibraryConstraints
+        ["channelflow-past-tense-news"] = new ChannelCatalogLibraryConstraints
         {
             LibraryName = "Home Movies",
             AlternateLibraryNames = ["Past Tense News", "Home Movie", "Home Videos", "Home Video"]
         },
-        ["fintv-youtube"] = new ChannelCatalogLibraryConstraints
+        ["channelflow-youtube"] = new ChannelCatalogLibraryConstraints
         {
             LibraryName = "YouTube"
         }
@@ -227,20 +227,20 @@ public static class ChannelAiRules
 
     private static readonly Dictionary<string, string> DefaultPlayoutTemplates = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["fintv-parody"] = "music-videos",
-        ["fintv-rap"] = "music-videos",
-        ["fintv-music-video"] = "music-videos",
-        ["fintv-youtube"] = "youtube-pbs",
-        ["fintv-game-shows"] = "winning-game-shows",
-        ["fintv-education"] = "get-learneded",
-        ["fintv-past-tense-news"] = "past-tense-news",
-        ["fintv-open-swim"] = "kids-all-day",
-        ["fintv-flashback"] = "classic-cable",
-        ["fintv-retro"] = "classic-cable",
-        ["fintv-creature"] = "movie-marathon",
-        ["fintv-hero"] = "movie-marathon",
-        ["fintv-holiday"] = "holiday-channel",
-        ["fintv-comedy"] = "slappy-comedy",
+        ["channelflow-parody"] = "music-videos",
+        ["channelflow-rap"] = "music-videos",
+        ["channelflow-music-video"] = "music-videos",
+        ["channelflow-youtube"] = "youtube-pbs",
+        ["channelflow-game-shows"] = "winning-game-shows",
+        ["channelflow-education"] = "get-learneded",
+        ["channelflow-past-tense-news"] = "past-tense-news",
+        ["channelflow-open-swim"] = "kids-all-day",
+        ["channelflow-flashback"] = "classic-cable",
+        ["channelflow-retro"] = "classic-cable",
+        ["channelflow-creature"] = "movie-marathon",
+        ["channelflow-hero"] = "movie-marathon",
+        ["channelflow-holiday"] = "holiday-channel",
+        ["channelflow-comedy"] = "slappy-comedy",
     };
 
     /// <summary>
@@ -255,7 +255,8 @@ public static class ChannelAiRules
             return null;
         }
 
-        return Rules.TryGetValue(libraryTag, out var rule) ? rule : null;
+        var key = FilterDefinition.CanonicalPresetId(libraryTag);
+        return key.Length > 0 && Rules.TryGetValue(key, out var rule) ? rule : null;
     }
 
     /// <summary>
@@ -278,7 +279,8 @@ public static class ChannelAiRules
             return null;
         }
 
-        return DefaultPlayoutTemplates.TryGetValue(libraryTag, out var templateId) ? templateId : null;
+        var key = FilterDefinition.CanonicalPresetId(libraryTag);
+        return key.Length > 0 && DefaultPlayoutTemplates.TryGetValue(key, out var templateId) ? templateId : null;
     }
 
     /// <summary>
@@ -293,7 +295,8 @@ public static class ChannelAiRules
             return null;
         }
 
-        return YearConstraints.TryGetValue(libraryTag, out var constraints) ? constraints : null;
+        var key = FilterDefinition.CanonicalPresetId(libraryTag);
+        return key.Length > 0 && YearConstraints.TryGetValue(key, out var constraints) ? constraints : null;
     }
 
     /// <summary>
@@ -320,7 +323,8 @@ public static class ChannelAiRules
             return null;
         }
 
-        return GenreConstraints.TryGetValue(libraryTag, out var constraints) ? constraints : null;
+        var key = FilterDefinition.CanonicalPresetId(libraryTag);
+        return key.Length > 0 && GenreConstraints.TryGetValue(key, out var constraints) ? constraints : null;
     }
 
     /// <summary>
@@ -343,7 +347,8 @@ public static class ChannelAiRules
             return null;
         }
 
-        return LibraryConstraints.TryGetValue(libraryTag, out var constraints) ? constraints : null;
+        var key = FilterDefinition.CanonicalPresetId(libraryTag);
+        return key.Length > 0 && LibraryConstraints.TryGetValue(key, out var constraints) ? constraints : null;
     }
 
     /// <summary>
@@ -404,7 +409,7 @@ public static class ChannelAiRules
     }
 
     /// <summary>
-    /// Extracts the first fintv tag from channel filter JSON.
+    /// Extracts the first ChannelFlow preset id from channel filter JSON.
     /// </summary>
     /// <param name="filterJson">Channel filter JSON.</param>
     /// <returns>Library tag or null.</returns>
@@ -436,7 +441,7 @@ public static class ChannelAiRules
     /// Library tags excluded from the AI lineup tab and bulk generate.
     /// </summary>
     public static bool IsExcludedFromAi(string? libraryTag)
-        => string.Equals(libraryTag, "fintv-news", StringComparison.OrdinalIgnoreCase);
+        => FilterDefinition.PresetIdsEqual(libraryTag, "channelflow-news");
 
     /// <summary>
     /// Optional max official rating from a preset filter (for example OpenSwim TV-PG).

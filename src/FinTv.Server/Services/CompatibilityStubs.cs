@@ -11,7 +11,7 @@ public sealed class BlackframeChapterTask
     {
         _ = cancellationToken;
         var state = FinTvRuntime.Current?.Configuration.BlackframeTaskState ?? new BlackframeTaskState();
-        state.LastError = "Blackframe scan runs in the FinTV Jellyfin plugin.";
+        state.LastError = "Blackframe scan runs in the ChannelFlow Jellyfin plugin.";
         FinTvRuntime.Current?.SaveConfiguration();
         progress.Report(100);
         return Task.CompletedTask;

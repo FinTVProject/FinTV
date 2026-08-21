@@ -3,8 +3,8 @@ using Microsoft.Extensions.Logging;
 namespace FinTv.Services;
 
 /// <summary>
-/// Resolves the yt-dlp executable from FINTV_YTDLP_PATH or the process PATH.
-/// The FinTV Jellyfin Docker image installs yt-dlp at /usr/local/bin/yt-dlp.
+/// Resolves the yt-dlp executable from CHANNELFLOW_YTDLP_PATH or the process PATH.
+/// The ChannelFlow Jellyfin Docker image installs yt-dlp at /usr/local/bin/yt-dlp.
 /// </summary>
 public sealed class YtDlpLocator
 {
@@ -26,11 +26,11 @@ public sealed class YtDlpLocator
             return _cachedPath;
         }
 
-        var overridePath = Environment.GetEnvironmentVariable("FINTV_YTDLP_PATH");
+        var overridePath = FinTv.AppEnvironment.Get("YTDLP_PATH");
         if (!string.IsNullOrWhiteSpace(overridePath) && File.Exists(overridePath))
         {
             _cachedPath = overridePath;
-            _logger.LogDebug("Using yt-dlp from FINTV_YTDLP_PATH at {Path}", overridePath);
+            _logger.LogDebug("Using yt-dlp from CHANNELFLOW_YTDLP_PATH at {Path}", overridePath);
             return overridePath;
         }
 

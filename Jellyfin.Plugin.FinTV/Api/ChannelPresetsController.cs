@@ -10,7 +10,7 @@ namespace Jellyfin.Plugin.FinTV.Api;
 /// Ready-made Binarygeek119 channel preset endpoints.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/channels/presets")]
+[Route("ChannelFlow/api/channels/presets")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class ChannelPresetsController : ControllerBase
 {

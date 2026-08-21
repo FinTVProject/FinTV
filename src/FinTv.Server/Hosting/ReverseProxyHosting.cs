@@ -27,7 +27,7 @@ internal static class ReverseProxyHosting
             kestrel.Limits.KeepAliveTimeout = TimeSpan.FromHours(8);
         });
 
-        var configDir = builder.Configuration["FINTV_CONFIG"]
+        var configDir = AppEnvironment.FromConfiguration(builder.Configuration, "CONFIG")
             ?? Path.Combine(builder.Environment.ContentRootPath, "config");
         var keyDir = Path.Combine(configDir, "dataprotection");
         Directory.CreateDirectory(keyDir);
@@ -40,8 +40,7 @@ internal static class ReverseProxyHosting
     {
         app.UseForwardedHeaders();
 
-        var pathBase = app.Configuration["FINTV_PATH_BASE"]
-            ?? Environment.GetEnvironmentVariable("FINTV_PATH_BASE")
+        var pathBase = AppEnvironment.FromConfiguration(app.Configuration, "PATH_BASE")
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_PATHBASE");
         if (!string.IsNullOrWhiteSpace(pathBase))
         {

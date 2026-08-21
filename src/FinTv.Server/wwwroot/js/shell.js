@@ -27,6 +27,7 @@
         ai: 'AI',
         weather: 'Weather',
         news: 'News',
+        transcode: 'Transcode',
         general: 'General',
         tasks: 'Tasks'
     };
@@ -46,6 +47,7 @@
         ai: 'AI lineup generation and tagging',
         weather: 'WeatherStar live channels',
         news: 'Live RSS news channel',
+        transcode: 'Hardware encoding for live MPEG-TS streams',
         general: 'Server-wide ChannelFlow-Server settings',
         tasks: 'Rebuild playouts and maintenance'
     };
@@ -156,16 +158,16 @@
         document.getElementById('topbar-user').textContent = userName || '';
         restorePathAfterLogin();
         buildDrawer();
-        const page = document.getElementById('FinTVConfigPage');
-        if (page && window.FinTV) {
-            window.FinTV.init(page);
+        const page = document.getElementById('ChannelFlowConfigPage');
+        if (page && window.ChannelFlow) {
+            window.ChannelFlow.init(page);
         }
         bindPathMappings();
     }
 
     function buildDrawer() {
         const nav = document.getElementById('drawer-nav');
-        const tabs = document.querySelectorAll('#FinTVConfigPage .fintv-tabs .tab');
+        const tabs = document.querySelectorAll('#ChannelFlowConfigPage .channelflow-tabs .tab');
         nav.innerHTML = '';
         tabs.forEach((tab) => {
             const link = document.createElement('a');
@@ -177,8 +179,8 @@
             }
             nav.appendChild(link);
         });
-        const current = window.FinTV && window.FinTV.tabFromPath
-            ? window.FinTV.tabFromPath(location.pathname)
+        const current = window.ChannelFlow && window.ChannelFlow.tabFromPath
+            ? window.ChannelFlow.tabFromPath(location.pathname)
             : 'channels';
         syncDrawer(current);
     }
@@ -260,8 +262,8 @@
                 await fetch(withAppBase('/api/auth/logout'), { method: 'POST', credentials: 'same-origin' });
                 location.reload();
             });
-            window.addEventListener('fintv-auth-required', () => showLogin(false));
-            window.addEventListener('fintv-tabchange', (e) => {
+            window.addEventListener('channelflow-auth-required', () => showLogin(false));
+            window.addEventListener('channelflow-tabchange', (e) => {
                 if (e.detail && e.detail.tab) {
                     syncDrawer(e.detail.tab, e.detail);
                 }

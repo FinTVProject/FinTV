@@ -1,7 +1,7 @@
 namespace FinTv.Services;
 
 /// <summary>
-/// JSON TV guide payload for the FinTV Web UI.
+/// JSON TV guide payload for the ChannelFlow Web UI.
 /// </summary>
 public sealed class TvGuidePage
 {

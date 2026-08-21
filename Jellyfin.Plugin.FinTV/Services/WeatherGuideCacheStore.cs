@@ -99,7 +99,7 @@ internal static class WeatherGuideCacheStore
 
     private static void WriteEntriesUnsafe(Dictionary<string, WeatherGuideSlotCache> entries)
     {
-        var plugin = Plugin.Instance ?? throw new InvalidOperationException("FinTV plugin not initialized.");
+        var plugin = Plugin.Instance ?? throw new InvalidOperationException("ChannelFlow plugin not initialized.");
         Directory.CreateDirectory(plugin.DataFolder);
         var path = GetCacheFilePath();
         var json = JsonSerializer.Serialize(entries, JsonOptions);
@@ -108,7 +108,7 @@ internal static class WeatherGuideCacheStore
 
     private static string GetCacheFilePath()
     {
-        var plugin = Plugin.Instance ?? throw new InvalidOperationException("FinTV plugin not initialized.");
+        var plugin = Plugin.Instance ?? throw new InvalidOperationException("ChannelFlow plugin not initialized.");
         return Path.Combine(plugin.DataFolder, "weather-guide-cache.json");
     }
 }

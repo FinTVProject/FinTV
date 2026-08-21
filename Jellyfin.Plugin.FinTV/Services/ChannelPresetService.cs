@@ -238,7 +238,7 @@ public class ChannelPresetService
     {
         var tag = ChannelAiRules.ExtractLibraryTag(filterJson);
         return !string.IsNullOrWhiteSpace(tag)
-            && tag.Equals(libraryTag, StringComparison.OrdinalIgnoreCase);
+            && FilterDefinition.PresetIdsEqual(tag, libraryTag);
     }
 
     private static void ApplyWeatherDefaults(Channel channel, ChannelPresetDefinition preset)

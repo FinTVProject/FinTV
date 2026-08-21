@@ -15,7 +15,7 @@ using Microsoft.Extensions.Hosting;
 namespace Jellyfin.Plugin.FinTV;
 
 /// <summary>
-/// Registers FinTV services with the Jellyfin DI container.
+/// Registers ChannelFlow services with the Jellyfin DI container.
 /// </summary>
 public class PluginServiceRegistrator : IPluginServiceRegistrator
 {
@@ -28,7 +28,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 
         serviceCollection.AddDbContext<FinTvDbContext>((sp, options) =>
         {
-            var plugin = Plugin.Instance ?? throw new InvalidOperationException("FinTV plugin not initialized.");
+            var plugin = Plugin.Instance ?? throw new InvalidOperationException("ChannelFlow plugin not initialized.");
             Directory.CreateDirectory(plugin.DataFolder);
             Directory.CreateDirectory(plugin.EbsCustomSlatesFolder);
             options.UseSqlite($"Data Source={plugin.DatabasePath}");
@@ -45,7 +45,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
             .ConfigureHttpClient(client =>
             {
                 client.Timeout = TimeSpan.FromMinutes(5);
-                client.DefaultRequestHeaders.UserAgent.ParseAdd("FinTV/0.0.2 (CommercialBrainz)");
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("ChannelFlow/0.0.2 (CommercialBrainz)");
             });
         serviceCollection.AddHttpClient();
         serviceCollection.AddScoped<ChannelService>();

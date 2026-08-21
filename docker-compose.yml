@@ -4,25 +4,25 @@ services:
     container_name: ChannelFlow
     build: .
     ports:
-      - "${FINTV_PORT:-8097}:8097"
+      - "${CHANNELFLOW_PORT:-${FINTV_PORT:-8097}}:8097"
     environment:
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-fintv}
       POSTGRES_USER: ${POSTGRES_USER:-fintv}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fintv}
-      FINTV_CONFIG: /config
+      CHANNELFLOW_CONFIG: /config
       JELLYFIN_URL: ${JELLYFIN_URL:-http://jellyfin:8096}
       TZ: ${TZ:-America/Chicago}
       FFMPEG_HWACCEL: ${FFMPEG_HWACCEL:-vaapi}
       FFMPEG_VAAPI_DEVICE: ${FFMPEG_VAAPI_DEVICE:-/dev/dri/renderD128}
-      FINTV_PUBLIC_URL: ${FINTV_PUBLIC_URL:-}
-      FINTV_PATH_BASE: ${FINTV_PATH_BASE:-}
+      CHANNELFLOW_PUBLIC_URL: ${CHANNELFLOW_PUBLIC_URL:-${FINTV_PUBLIC_URL:-}}
+      CHANNELFLOW_PATH_BASE: ${CHANNELFLOW_PATH_BASE:-${FINTV_PATH_BASE:-}}
     devices:
       - /dev/dri:/dev/dri
     volumes:
       - fintv-config:/config
-      - ${FINTV_MEDIA:-./media}:/media
+      - ${CHANNELFLOW_MEDIA:-${FINTV_MEDIA:-./media}}:/media
     restart: unless-stopped
 
 volumes:

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.FinTV.Services;
 
 /// <summary>
-/// Resolves Docker network attachment for FinTV sidecars (Playwright, WeatherStar) when Jellyfin runs in a container.
+/// Resolves Docker network attachment for ChannelFlow sidecars (Playwright, WeatherStar) when Jellyfin runs in a container.
 /// </summary>
 public static class DockerSidecarNetworkHelper
 {
@@ -21,13 +21,13 @@ public static class DockerSidecarNetworkHelper
     public static bool RunsInsideDocker() => File.Exists("/.dockerenv");
 
     public static bool UsesExplicitDockerNetwork()
-        => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FINTV_DOCKER_NETWORK"));
+        => !string.IsNullOrWhiteSpace(Jellyfin.Plugin.FinTV.AppEnvironment.Get("DOCKER_NETWORK"));
 
     public static async Task<DockerSidecarNetworkResolution> ResolveSidecarNetworkAsync(
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        var overrideNetwork = Environment.GetEnvironmentVariable("FINTV_DOCKER_NETWORK");
+        var overrideNetwork = Jellyfin.Plugin.FinTV.AppEnvironment.Get("DOCKER_NETWORK");
         if (!string.IsNullOrWhiteSpace(overrideNetwork))
         {
             return new DockerSidecarNetworkResolution
@@ -47,12 +47,12 @@ public static class DockerSidecarNetworkHelper
         {
             logger.LogWarning(
                 "Jellyfin is running in Docker but its container name could not be resolved. "
-                + "Set FINTV_JELLYFIN_CONTAINER (for example Jellyfin on Unraid) so WeatherStar and Playwright can share loopback.");
+                + "Set CHANNELFLOW_JELLYFIN_CONTAINER (for example Jellyfin on Unraid) so WeatherStar and Playwright can share loopback.");
             return new DockerSidecarNetworkResolution();
         }
 
         logger.LogInformation(
-            "Jellyfin container {ContainerRef} will share network namespace with FinTV sidecar",
+            "Jellyfin container {ContainerRef} will share network namespace with ChannelFlow sidecar",
             containerRef);
 
         return new DockerSidecarNetworkResolution
@@ -65,7 +65,7 @@ public static class DockerSidecarNetworkHelper
 
     public static async Task<string?> ResolveJellyfinContainerRefAsync(CancellationToken cancellationToken = default)
     {
-        var containerRef = Environment.GetEnvironmentVariable("FINTV_JELLYFIN_CONTAINER");
+        var containerRef = Jellyfin.Plugin.FinTV.AppEnvironment.Get("JELLYFIN_CONTAINER");
         if (!string.IsNullOrWhiteSpace(containerRef))
         {
             return containerRef.Trim();
@@ -239,7 +239,7 @@ public static class DockerSidecarNetworkHelper
 }
 
 /// <summary>
-/// Docker network attachment for a FinTV sidecar container.
+/// Docker network attachment for a ChannelFlow sidecar container.
 /// </summary>
 public sealed class DockerSidecarNetworkResolution
 {

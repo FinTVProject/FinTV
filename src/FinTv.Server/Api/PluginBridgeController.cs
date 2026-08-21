@@ -131,7 +131,7 @@ public class PluginBridgeController : ControllerBase
     }
 
     /// <summary>
-    /// Replaces the Jellyfin library list used by the FinTV Library tab and catalog sync filters.
+    /// Replaces the Jellyfin library list used by the ChannelFlow Library tab and catalog sync filters.
     /// </summary>
     [HttpPost("libraries")]
     public IActionResult SyncLibraries([FromBody] JellyfinLibraryListRequest? request)

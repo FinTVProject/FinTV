@@ -9,13 +9,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public string ScheduleTimeZone { get; set; } = "America/New_York";
 
     /// <summary>
-    /// When true, FinTV emits verbose developer logs (especially for AI channel building).
+    /// When true, ChannelFlow emits verbose developer logs (especially for AI channel building).
     /// </summary>
     public bool DebugLogging { get; set; }
 
     public string? CommercialLibraryId { get; set; }
 
-    public string? CommercialLibraryTag { get; set; } = "fintv-commercial";
+    public string? CommercialLibraryTag { get; set; } = "channelflow-commercial";
 
     public int PlayoutDaysToBuild { get; set; } = 14;
 
@@ -65,7 +65,7 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// ws4kp permalink query string copied from WeatherStar (display toggles, units, speed, etc.).
-    /// FinTV merges each channel's <c>latLonQuery</c>, forces <c>kiosk=true</c>, and optionally sets <c>wide</c> at capture time.
+    /// ChannelFlow merges each channel's <c>latLonQuery</c>, forces <c>kiosk=true</c>, and optionally sets <c>wide</c> at capture time.
     /// </summary>
     public string WeatherStarPermalinkQuery { get; set; } = WeatherStarChannelService.DefaultWeatherStarPermalinkQuery;
 

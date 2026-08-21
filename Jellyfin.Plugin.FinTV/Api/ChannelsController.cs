@@ -8,10 +8,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jellyfin.Plugin.FinTV.Api;
 
 /// <summary>
-/// REST endpoints for FinTV channel management.
+/// REST endpoints for ChannelFlow channel management.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/channels")]
+[Route("ChannelFlow/api/channels")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class ChannelsController : ControllerBase
 {

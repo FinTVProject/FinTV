@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FinTv.Api;
 
 /// <summary>
-/// REST endpoints for FinTV channel management.
+/// REST endpoints for ChannelFlow channel management.
 /// </summary>
 [ApiController]
 [Route("api/channels")]

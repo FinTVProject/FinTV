@@ -24,7 +24,7 @@ public class AiCatalogManifestBuilder
         var catalogMode = JellyfinCatalogService.ResolveCatalogMode(channel);
         var mapMode = string.Equals(
             ChannelAiRules.ExtractLibraryTag(channel.FilterJson),
-            "fintv-past-tense-news",
+            "channelflow-past-tense-news",
             StringComparison.OrdinalIgnoreCase)
             ? ChannelCatalogMode.Mixed
             : catalogMode;

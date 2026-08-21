@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.FinTV.Services;
 
 /// <summary>
-/// Resolves FinTV schedule time zones with normalization and safe fallbacks.
+/// Resolves ChannelFlow schedule time zones with normalization and safe fallbacks.
 /// </summary>
 public static class ScheduleTimeZoneHelper
 {

@@ -12,7 +12,7 @@ namespace Jellyfin.Plugin.FinTV.Api;
 /// REST endpoints for lineup editing, previews, and playout rebuilds.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/lineups")]
+[Route("ChannelFlow/api/lineups")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class LineupsController : ControllerBase
 {

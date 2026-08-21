@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.FinTV.Api;
 /// REST endpoints for commercial library management and blackframe scanning.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/commercials")]
+[Route("ChannelFlow/api/commercials")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class CommercialsController : ControllerBase
 {
@@ -36,7 +36,7 @@ public class CommercialsController : ControllerBase
     }
 
     /// <summary>
-    /// Gets all commercials in the FinTV library.
+    /// Gets all commercials in the ChannelFlow library.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of commercials.</returns>
@@ -130,7 +130,7 @@ public class CommercialsController : ControllerBase
     }
 
     /// <summary>
-    /// Proxies a YouTube thumbnail so the FinTV dashboard can display preview cards.
+    /// Proxies a YouTube thumbnail so the ChannelFlow dashboard can display preview cards.
     /// </summary>
     /// <param name="youtubeId">YouTube video id.</param>
     /// <param name="cancellationToken">Cancellation token.</param>

@@ -10,7 +10,7 @@ public class PluginConfiguration
 
     public string? CommercialLibraryId { get; set; }
 
-    public string? CommercialLibraryTag { get; set; } = "fintv-commercial";
+    public string? CommercialLibraryTag { get; set; } = "channelflow-commercial";
 
     public int PlayoutDaysToBuild { get; set; } = 14;
 
@@ -87,6 +87,29 @@ public class PluginConfiguration
     /// Active WeatherStar engine. Only one of WS4000 or WS3000 runs at a time.
     /// </summary>
     public string WeatherStarVariant { get; set; } = "ws4kp";
+
+    /// <summary>
+    /// Live MPEG-TS ffmpeg encode settings. Empty values follow <c>FFMPEG_*</c> environment defaults.
+    /// </summary>
+    public TranscodeSettings Transcode { get; set; } = new();
+}
+
+public class TranscodeSettings
+{
+    /// <summary>
+    /// <c>none</c>, <c>vaapi</c>, or <c>nvenc</c>. Empty means follow <c>FFMPEG_HWACCEL</c>.
+    /// </summary>
+    public string? HardwareAcceleration { get; set; }
+
+    /// <summary>
+    /// Encoder name such as <c>libx264</c>, <c>h264_vaapi</c>, or <c>h264_nvenc</c>. Empty means auto.
+    /// </summary>
+    public string? VideoEncoder { get; set; }
+
+    /// <summary>
+    /// VAAPI render node, typically <c>/dev/dri/renderD128</c>. Empty means follow <c>FFMPEG_VAAPI_DEVICE</c>.
+    /// </summary>
+    public string? VaapiDevice { get; set; }
 }
 
 public class Ws4kpDockerSettings : IWeatherStarDockerSettings
@@ -238,7 +261,7 @@ public class AiGenerateAllJobState
 }
 
 /// <summary>
-/// Which Jellyfin libraries FinTV should use for TV, movies, music, and music videos.
+/// Which Jellyfin libraries ChannelFlow should use for TV, movies, music, and music videos.
 /// Empty lists mean every matching library.
 /// </summary>
 public class JellyfinLibrarySettings

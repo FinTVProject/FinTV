@@ -9,10 +9,12 @@ namespace FinTv.News;
 public sealed class NewsTtsService
 {
     public const int MaxChunkChars = 180;
+    private static readonly TimeSpan RateLimitBackoff = TimeSpan.FromMinutes(10);
 
     private readonly IHttpClientFactory _http;
     private readonly IFfmpegLocator _ffmpeg;
     private readonly ILogger<NewsTtsService> _logger;
+    private DateTimeOffset _rateLimitedUntil = DateTimeOffset.MinValue;
 
     public NewsTtsService(IHttpClientFactory http, IFfmpegLocator ffmpeg, ILogger<NewsTtsService> logger)
     {
@@ -34,6 +36,12 @@ public sealed class NewsTtsService
         }
 
         Directory.CreateDirectory(newsDir);
+        var output = Path.Combine(newsDir, "speech.mp3");
+        if (DateTimeOffset.UtcNow < _rateLimitedUntil)
+        {
+            return File.Exists(output) ? output : null;
+        }
+
         var partDir = Path.Combine(newsDir, "tts");
         Directory.CreateDirectory(partDir);
         var parts = new List<string>();
@@ -44,16 +52,30 @@ public sealed class NewsTtsService
             var client = _http.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.UserAgent.Clear();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (FinTV news TTS)");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (ChannelFlow news TTS)");
             client.DefaultRequestHeaders.Referrer = new Uri("https://translate.google.com/");
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("audio/mpeg"));
 
             for (var i = 0; i < chunks.Count; i++)
             {
+                if (i > 0)
+                {
+                    await Task.Delay(250, cancellationToken);
+                }
+
                 var encoded = Uri.EscapeDataString(chunks[i]);
                 var url = $"https://translate.google.com/translate_tts?ie=UTF-8&q={encoded}&tl={Uri.EscapeDataString(lang)}&client=tw-ob";
                 var path = Path.Combine(partDir, $"part-{i:00}.mp3");
-                var bytes = await client.GetByteArrayAsync(url, cancellationToken);
+                using var response = await client.GetAsync(url, cancellationToken);
+                if ((int)response.StatusCode == 429)
+                {
+                    _rateLimitedUntil = DateTimeOffset.UtcNow.Add(RateLimitBackoff);
+                    _logger.LogWarning("News TTS rate-limited; backing off for {Minutes} minutes", RateLimitBackoff.TotalMinutes);
+                    return File.Exists(output) ? output : null;
+                }
+
+                response.EnsureSuccessStatusCode();
+                var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
                 if (bytes.Length < 64)
                 {
                     throw new InvalidOperationException("TTS returned an empty clip.");
@@ -63,7 +85,6 @@ public sealed class NewsTtsService
                 parts.Add(path);
             }
 
-            var output = Path.Combine(newsDir, "speech.mp3");
             if (parts.Count == 1)
             {
                 File.Copy(parts[0], output, overwrite: true);
@@ -93,7 +114,7 @@ public sealed class NewsTtsService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "News TTS failed");
-            return null;
+            return File.Exists(output) ? output : null;
         }
     }
 

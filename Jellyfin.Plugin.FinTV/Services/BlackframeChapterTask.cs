@@ -22,13 +22,13 @@ public partial class BlackframeChapterTask : IScheduledTask
         _logger = logger;
     }
 
-    public string Name => "FinTV Commercial Blackframe Detection";
+    public string Name => "ChannelFlow Commercial Blackframe Detection";
 
     public string Key => "FinTVBlackframe";
 
     public string Description => "Detect commercial segments using FFmpeg blackframe analysis and store chapter markers.";
 
-    public string Category => "FinTV";
+    public string Category => "ChannelFlow";
 
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
     {

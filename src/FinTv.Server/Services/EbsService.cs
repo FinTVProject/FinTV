@@ -142,7 +142,7 @@ public class EbsService
             throw new InvalidOperationException("Only PNG and JPG images are supported.");
         }
 
-        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("FinTV plugin not initialized.");
+        var plugin = FinTvRuntime.Current ?? throw new InvalidOperationException("ChannelFlow plugin not initialized.");
         Directory.CreateDirectory(plugin.EbsCustomSlatesFolder);
         RemoveCustomSlateFiles(variant);
 

@@ -96,7 +96,7 @@
         if (false) {
             return ApiClient.getUrl(normalized);
         }
-        return withAppBase('/' + normalized.replace(/^FinTV\/api/, 'api'));
+        return withAppBase('/' + normalized.replace(/^(?:ChannelFlow|FinTV)\/api/, 'api'));
     }
 
     function parseErrorMessage(message) {
@@ -476,7 +476,7 @@
         }
 
         return fetch(url, fetchOptions).then(async (res) => {
-            if (res.status === 401) { window.dispatchEvent(new Event('fintv-auth-required')); throw new Error('Sign in required'); }
+            if (res.status === 401) { window.dispatchEvent(new Event('channelflow-auth-required')); throw new Error('Sign in required'); }
             if (!res.ok) {
                 const text = await res.text();
                 throw new Error(parseErrorMessage(text || res.statusText));
@@ -1117,14 +1117,14 @@
         }
 
         const tags = Array.isArray(filter.tags) ? filter.tags : [];
-        return tags.find((tag) => /^fintv-/i.test(tag)) || '';
+        return tags.find((tag) => /^(?:channelflow|fintv)-/i.test(tag)) || '';
     }
 
     function mergeLibraryTagIntoFilter(existingJson, libraryTag) {
         const filter = parseChannelFilter(existingJson);
         const tag = String(libraryTag || '').trim();
         const otherTags = (Array.isArray(filter.tags) ? filter.tags : [])
-            .filter((item) => item && !/^fintv-/i.test(item) && item !== tag);
+            .filter((item) => item && !/^(?:channelflow|fintv)-/i.test(item) && item !== tag);
         if (tag) {
             filter.presetId = tag;
         } else {
@@ -1157,7 +1157,7 @@
 
     function setDeepEditorVisible(show) {
         const editor = $('channel-deep-editor');
-        const app = $('fintv-app');
+        const app = $('channelflow-app');
         if (editor) {
             editor.classList.toggle('hidden', !show);
             editor.hidden = !show;
@@ -1291,7 +1291,7 @@
         fillDeepChannelForm(channel);
         setDeepEditorVisible(true);
         document.title = 'Edit ' + channel.name + ' · ChannelFlow-Server';
-        window.dispatchEvent(new CustomEvent('fintv-tabchange', {
+        window.dispatchEvent(new CustomEvent('channelflow-tabchange', {
             detail: {
                 tab: 'channels',
                 title: 'Edit ' + channel.name,
@@ -1325,7 +1325,7 @@
 
     function openChannelEditorWindow(id) {
         const url = withAppBase(channelEditorPath(id));
-        const win = window.open(url, 'fintv-edit-' + id, 'width=1120,height=900');
+        const win = window.open(url, 'channelflow-edit-' + id, 'width=1120,height=900');
         if (!win) {
             history.pushState({ tab: 'channel-editor', id }, '', url);
             openDeepChannelEditor(id, { fromRoute: true });
@@ -2083,7 +2083,7 @@
                 const youtubeId = item.youtubeVideoId || item.youTubeVideoId || item.YouTubeVideoId || '';
                 const pageUrl = item.commercialPageUrl || item.CommercialPageUrl || '';
                 const thumb = youtubeId
-                    ? resolveUrl('FinTV/api/commercials/brainz/thumbnail/' + encodeURIComponent(youtubeId))
+                    ? resolveUrl('ChannelFlow/api/commercials/brainz/thumbnail/' + encodeURIComponent(youtubeId))
                     : (item.thumbnailUrl || item.ThumbnailUrl || '');
                 const meta = [brand, year, duration].filter((part) => part !== '' && part != null).join(' · ');
                 const thumbHtml = thumb
@@ -2198,7 +2198,7 @@
                 $('commercial-status').textContent = status ? JSON.stringify(status, null, 2) : 'No scan running.';
             }
             const jellyfin = (list || []).filter((c) => !isBrainzCommercial(c));
-            renderCommercialTable('commercial-list', jellyfin, 'No Jellyfin commercials synced yet. Tag items with fintv-commercial and click Sync Jellyfin Library.');
+            renderCommercialTable('commercial-list', jellyfin, 'No Jellyfin commercials synced yet. Tag items with channelflow-commercial and click Sync Jellyfin Library.');
             await loadSearchPlaylists();
         } catch (err) {
             reportApiError(err, 'Could not load commercials.');
@@ -3778,16 +3778,22 @@
                 }
                 voice.value = value;
             }
+            const noMusic = $('news-no-music');
             const music = $('news-music-library');
-            if (music && Array.isArray(settings.musicLibraries)) {
+            const libraries = Array.isArray(settings.musicLibraries) ? settings.musicLibraries : [];
+            if (music) {
                 const current = settings.musicLibraryId || '';
-                music.innerHTML = '<option value="none">None (no music)</option>' +
-                    '<option value="">Use EBS background music</option>' +
-                    settings.musicLibraries.map((lib) => `<option value="${escapeHtml(lib.id)}">${escapeHtml(lib.name)}</option>`).join('');
-                music.value = current;
-                if (music.value !== current) {
-                    music.value = current.toLowerCase() === 'none' ? 'none' : '';
+                const silent = String(current).toLowerCase() === 'none';
+                music.innerHTML = '<option value="">Use EBS background music</option>' +
+                    libraries.map((lib) => `<option value="${escapeHtml(lib.id)}">${escapeHtml(lib.name)}</option>`).join('');
+                music.value = silent ? '' : current;
+                if (!silent && music.value !== current) {
+                    music.value = '';
                 }
+                if (noMusic) {
+                    noMusic.checked = silent;
+                }
+                syncNewsMusicUi();
             }
             newsFeeds = Array.isArray(feeds) ? feeds : [];
             if (newsFeeds.length === 0) {
@@ -3807,7 +3813,7 @@
             <div class="news-feed-row" data-index="${index}">
                 <label class="checkbox-field" title="Enabled">
                     <input type="checkbox" class="news-feed-enabled" ${feed.enabled !== false ? 'checked' : ''}>
-                    <span class="fintv-check-box" aria-hidden="true"></span>
+                    <span class="channelflow-check-box" aria-hidden="true"></span>
                 </label>
                 <input type="text" class="emby-input news-feed-name" placeholder="Name" value="${escapeHtml(feed.name || '')}">
                 <input type="url" class="emby-input news-feed-url" placeholder="https://example.com/rss.xml" value="${escapeHtml(feed.url || '')}">
@@ -3839,8 +3845,18 @@
         renderNewsFeeds();
     }
 
+    function syncNewsMusicUi() {
+        const music = $('news-music-library');
+        const noMusic = $('news-no-music');
+        if (!music) {
+            return;
+        }
+        music.disabled = !!noMusic?.checked;
+    }
+
     async function saveNewsSettings() {
         const music = $('news-music-library');
+        const noMusic = !!$('news-no-music')?.checked;
         await api('/news/settings', {
             method: 'PUT',
             body: JSON.stringify({
@@ -3853,8 +3869,8 @@
                 voice: $('news-voice')?.value || 'en-US',
                 introText: $('news-intro')?.value || '',
                 outroText: $('news-outro')?.value || '',
-                musicLibraryId: music?.value || '',
-                musicLibraryName: music?.value === 'none'
+                musicLibraryId: noMusic ? 'none' : (music?.value || ''),
+                musicLibraryName: noMusic
                     ? 'None'
                     : (music?.value ? (music.selectedOptions?.[0]?.textContent || '').trim() : ''),
                 minNewStories: Number($('news-min-new')?.value || 1),
@@ -4094,6 +4110,124 @@
         await loadCatalogCleanup();
     }
 
+    function syncTranscodeUi() {
+        const accel = $('transcode-hwaccel')?.value || 'none';
+        const vaapiField = $('transcode-vaapi-field');
+        const vaapiHint = $('transcode-vaapi-hint');
+        const showVaapi = accel === 'vaapi';
+        if (vaapiField) {
+            vaapiField.classList.toggle('hidden', !showVaapi);
+        }
+        if (vaapiHint) {
+            vaapiHint.classList.toggle('hidden', !showVaapi);
+        }
+    }
+
+    function renderTranscodeStatus(settings) {
+        const el = $('transcode-status');
+        if (!el || !settings) {
+            return;
+        }
+        const lines = [
+            `Effective encoder: ${settings.effectiveEncoder || 'libx264'}`,
+            `FFmpeg: ${settings.ffmpegPath || 'ffmpeg'}`,
+            `Source: ${settings.source === 'saved' ? 'saved on this tab' : 'container environment'}`
+        ];
+        if (settings.vaapiRequested && !settings.vaapiDeviceExists) {
+            lines.push(`VAAPI device ${settings.vaapiDevice || '/dev/dri/renderD128'} was not found. Using software encode.`);
+        } else if (settings.useVaapi) {
+            lines.push(`VAAPI device ${settings.vaapiDevice} is available.`);
+        }
+        if (settings.environment) {
+            lines.push(`Container default: ${settings.environment.hardwareAcceleration || 'none'} / ${settings.environment.videoEncoder || 'libx264'}`);
+        }
+        el.textContent = lines.join('\n');
+    }
+
+    async function loadTranscode() {
+        try {
+            const settings = await api('/transcode/settings');
+            if ($('transcode-hwaccel')) {
+                $('transcode-hwaccel').value = settings.hardwareAcceleration || 'none';
+            }
+            if ($('transcode-encoder')) {
+                const encoder = settings.videoEncoder || 'auto';
+                const select = $('transcode-encoder');
+                if (![...select.options].some((o) => o.value === encoder)) {
+                    const extra = document.createElement('option');
+                    extra.value = encoder;
+                    extra.textContent = encoder;
+                    select.appendChild(extra);
+                }
+                select.value = encoder;
+            }
+            if ($('transcode-vaapi-device')) {
+                $('transcode-vaapi-device').value = settings.vaapiDevice || '/dev/dri/renderD128';
+            }
+            renderTranscodeStatus(settings);
+            syncTranscodeUi();
+        } catch (err) {
+            reportApiError(err, 'Could not load transcode settings.');
+        }
+    }
+
+    async function saveTranscodeSettings() {
+        const saved = await api('/transcode/settings', {
+            method: 'PUT',
+            body: JSON.stringify({
+                hardwareAcceleration: $('transcode-hwaccel')?.value || 'none',
+                videoEncoder: $('transcode-encoder')?.value || 'auto',
+                vaapiDevice: ($('transcode-vaapi-device')?.value || '').trim()
+            })
+        });
+        toast('Transcode settings saved. New streams use these settings immediately.', 'success');
+        renderTranscodeStatus(saved);
+        if ($('transcode-hwaccel')) {
+            $('transcode-hwaccel').value = saved.hardwareAcceleration || 'none';
+        }
+        if ($('transcode-encoder')) {
+            $('transcode-encoder').value = saved.videoEncoder || 'auto';
+        }
+        if ($('transcode-vaapi-device')) {
+            $('transcode-vaapi-device').value = saved.vaapiDevice || '/dev/dri/renderD128';
+        }
+        syncTranscodeUi();
+        const result = $('transcode-test-result');
+        if (result) {
+            result.textContent = '';
+        }
+    }
+
+    async function testTranscode() {
+        const resultEl = $('transcode-test-result');
+        if (resultEl) {
+            resultEl.textContent = 'Running a 1-second test encode…';
+        }
+        const result = await api('/transcode/test', { method: 'POST' });
+        if (result.ok) {
+            toast(`Test encode succeeded with ${result.encoder}.`, 'success');
+            if (resultEl) {
+                resultEl.textContent = `Test encode succeeded with ${result.encoder}.`;
+            }
+            return;
+        }
+        const error = result.error || `ffmpeg exited ${result.exitCode}`;
+        toast(error, 'error');
+        if (resultEl) {
+            resultEl.textContent = error;
+        }
+    }
+
+    async function resetTranscodeSettings() {
+        const saved = await api('/transcode/settings', {
+            method: 'PUT',
+            body: JSON.stringify({ resetToEnvironment: true })
+        });
+        toast('Transcode settings reset to container environment.', 'success');
+        await loadTranscode();
+        renderTranscodeStatus(saved);
+    }
+
     async function loadGeneral() {
         try {
             const [settings, timeZones] = await Promise.all([
@@ -4213,19 +4347,19 @@
             return null;
         }
 
-        if (node.id === 'FinTVConfigPage') {
+        if (node.id === 'ChannelFlowConfigPage') {
             return node;
         }
 
         if (typeof node.querySelector === 'function') {
-            const nested = node.querySelector('#FinTVConfigPage');
+            const nested = node.querySelector('#ChannelFlowConfigPage');
             if (nested) {
                 return nested;
             }
         }
 
         if (typeof node.closest === 'function') {
-            return node.closest('#FinTVConfigPage');
+            return node.closest('#ChannelFlowConfigPage');
         }
 
         return null;
@@ -4288,7 +4422,7 @@
             const checked = memberIds.some((id) => selected.has(id)) ? ' checked' : '';
             return `<label class="field checkbox-field">
                 <input type="checkbox" data-lib-id="${escapeHtml(String(lib.id || memberIds[0] || ''))}" data-lib-ids="${escapeHtml(memberIds.join(','))}"${checked}>
-                <span class="fintv-check-box" aria-hidden="true"></span>
+                <span class="channelflow-check-box" aria-hidden="true"></span>
                 <span>${escapeHtml(lib.name)} <span class="library-pick-meta">${count} item${count === 1 ? '' : 's'}</span></span>
             </label>`;
         }).join('');
@@ -4589,7 +4723,7 @@
 
         const body = `
             <label class="field"><span>Name</span><input id="sp-name" class="emby-input" value="${escapeHtml(draft.name || '')}"></label>
-            <label class="field checkbox-field"><input id="sp-enabled" type="checkbox"${draft.enabled !== false ? ' checked' : ''}><span class="fintv-check-box" aria-hidden="true"></span><span>Enabled</span></label>
+            <label class="field checkbox-field"><input id="sp-enabled" type="checkbox"${draft.enabled !== false ? ' checked' : ''}><span class="channelflow-check-box" aria-hidden="true"></span><span>Enabled</span></label>
             <label class="field"><span>Day of week</span>
                 <select id="sp-day" class="emby-select">${DAYS.map((d, i) =>
                     `<option value="${i}"${draft.dayOfWeek === i ? ' selected' : ''}>${d}</option>`).join('')}</select></label>
@@ -5007,6 +5141,7 @@
         ai: '/ai',
         weather: '/weather',
         news: '/news',
+        transcode: '/transcode',
         general: '/general',
         tasks: '/tasks'
     };
@@ -5026,6 +5161,7 @@
         ai: 'AI',
         weather: 'Weather',
         news: 'News',
+        transcode: 'Transcode',
         general: 'General',
         tasks: 'Tasks'
     };
@@ -5045,6 +5181,7 @@
         ai: 'AI lineup generation and tagging',
         weather: 'WeatherStar live channels',
         news: 'Live RSS news channel',
+        transcode: 'Hardware encoding for live MPEG-TS streams',
         general: 'Server-wide ChannelFlow-Server settings',
         tasks: 'Rebuild playouts and maintenance'
     };
@@ -5151,7 +5288,7 @@
             closeDeepChannelEditor({ skipHistory: true, stay: true });
         }
 
-        qa('.fintv-tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+        qa('.channelflow-tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
         document.querySelectorAll('.tab-panel').forEach((p) => {
             const on = p.id === 'tab-' + name;
             p.classList.toggle('active', on);
@@ -5167,6 +5304,7 @@
         if (name === 'ai') loadAi();
         if (name === 'weather') loadWeather();
         if (name === 'news') loadNews();
+        if (name === 'transcode') loadTranscode();
         if (name === 'presets') loadPresets();
         if (name === 'lineups') loadLineups();
         if (name === 'list') loadLists();
@@ -5186,7 +5324,7 @@
         }
 
         document.title = (TAB_TITLES[name] || name) + ' · ChannelFlow-Server';
-        window.dispatchEvent(new CustomEvent('fintv-tabchange', {
+        window.dispatchEvent(new CustomEvent('channelflow-tabchange', {
             detail: { tab: name, title: TAB_TITLES[name], subtitle: TAB_SUBTITLES[name] }
         }));
     }
@@ -5221,7 +5359,7 @@
 
     function decorateCheckboxes() {
         qa('.checkbox-field').forEach((label) => {
-            if (label.querySelector('.fintv-check-box')) {
+            if (label.querySelector('.channelflow-check-box')) {
                 return;
             }
 
@@ -5231,7 +5369,7 @@
             }
 
             const box = document.createElement('span');
-            box.className = 'fintv-check-box';
+            box.className = 'channelflow-check-box';
             box.setAttribute('aria-hidden', 'true');
             input.insertAdjacentElement('afterend', box);
         });
@@ -5344,6 +5482,11 @@
         click('btn-remove-ebs-international', () => removeEbsSlate('international'));
         click('btn-save-weather', saveWeatherSettings);
         click('btn-save-news', () => saveNewsSettings().catch((e) => toast(e.message, 'error')));
+        change('news-no-music', syncNewsMusicUi);
+        click('btn-save-transcode', () => saveTranscodeSettings().catch((e) => toast(e.message, 'error')));
+        click('btn-test-transcode', () => testTranscode().catch((e) => toast(e.message, 'error')));
+        click('btn-reset-transcode', () => resetTranscodeSettings().catch((e) => toast(e.message, 'error')));
+        change('transcode-hwaccel', syncTranscodeUi);
         click('btn-save-news-feeds', () => saveNewsFeeds().catch((e) => toast(e.message, 'error')));
         click('btn-add-news-feed', addNewsFeedRow);
         click('btn-preview-news', () => loadNewsPreview(true).catch((e) => toast(e.message, 'error')));
@@ -5397,7 +5540,7 @@
             return preferred;
         }
 
-        const pages = document.querySelectorAll('#FinTVConfigPage');
+        const pages = document.querySelectorAll('#ChannelFlowConfigPage');
         for (let i = pages.length - 1; i >= 0; i--) {
             if (isActiveConfigPage(pages[i])) {
                 return pages[i];
@@ -5411,17 +5554,17 @@
         return pages.length ? pages[pages.length - 1] : null;
     }
 
-    function bootFinTvAdmin(page) {
+    function bootChannelFlowAdmin(page) {
         page = resolveConfigPage(page);
-        if (!page || !window.FinTV || !window.FinTV.init) {
+        if (!page || !window.ChannelFlow || !window.ChannelFlow.init) {
             return false;
         }
 
-        window.FinTV.init(page);
+        window.ChannelFlow.init(page);
         return true;
     }
 
-    window.FinTV = { init, refresh, loadChannels, bootFinTvAdmin, switchTab, tabFromPath };
+    window.ChannelFlow = { init, refresh, loadChannels, bootChannelFlowAdmin, switchTab, tabFromPath };
 
     document.addEventListener('DOMContentLoaded', function () {
         const app = document.getElementById('app-shell');
@@ -5429,9 +5572,9 @@
             return;
         }
 
-        const page = document.getElementById('FinTVConfigPage');
-        if (page && window.FinTV) {
-            window.FinTV.init(page);
+        const page = document.getElementById('ChannelFlowConfigPage');
+        if (page && window.ChannelFlow) {
+            window.ChannelFlow.init(page);
         }
     });
 })();

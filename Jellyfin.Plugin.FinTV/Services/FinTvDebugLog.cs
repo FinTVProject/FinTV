@@ -5,14 +5,14 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.FinTV.Services;
 
 /// <summary>
-/// Gates verbose developer logging behind the FinTV debug setting.
+/// Gates verbose developer logging behind the ChannelFlow debug setting.
 /// </summary>
 public static class FinTvDebugLog
 {
-    private const string AiLogTemplate = "[FinTV AI] {Detail}";
+    private const string AiLogTemplate = "[ChannelFlow AI] {Detail}";
 
     /// <summary>
-    /// Gets whether verbose FinTV debug logging is enabled.
+    /// Gets whether verbose ChannelFlow debug logging is enabled.
     /// </summary>
     public static bool IsEnabled => Plugin.Instance?.Configuration.DebugLogging == true;
 

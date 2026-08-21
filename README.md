@@ -12,7 +12,7 @@ The Jellyfin plugin (GUID `f4e8a2b1-3c5d-4e6f-9a8b-7c6d5e4f3a2b`) syncs library 
 
 ## What runs where
 
-| ChannelFlow-Server (this repo) | FinTV Plugin |
+| ChannelFlow-Server (this repo) | ChannelFlow Plugin |
 | --- | --- |
 | Channels, lineups, playout, FFmpeg MPEG-TS | Server URL + API key |
 | Commercials / CommercialBrainz | Catalog metadata sync (IDs, tags, duration, **path**, **chapters**) |
@@ -27,7 +27,7 @@ Playback reads **local files** from mounted library shares. Configure **path rem
 
 - Docker (Unraid Community Apps template in [`unraid/channelflow.xml`](unraid/channelflow.xml))
 - PostgreSQL (your own instance)
-- Jellyfin 12 + the FinTV plugin
+- Jellyfin 12 + the ChannelFlow plugin
 - The same media shares mounted into Jellyfin and ChannelFlow-Server
 
 ## Docker
@@ -36,7 +36,7 @@ Image: `ghcr.io/flowmeadow01/channelflow:latest` (built from this repo). Unraid 
 
 ```bash
 cp .env.example .env
-# set FINTV_MEDIA and POSTGRES_* for your existing database
+# set CHANNELFLOW_MEDIA and POSTGRES_* for your existing database
 docker compose up -d --build
 ```
 
@@ -45,7 +45,7 @@ Then:
 1. Open `http://<host>:8097` and create the admin username and password on first launch
 2. Copy the plugin API key from **General** (created automatically on first boot)
 3. Add path remaps under General (Jellyfin prefix → `/media` or your mount)
-4. Install the FinTV plugin, set Server URL + API key, run **FinTV Catalog Sync**
+4. Install the ChannelFlow plugin, set Server URL + API key, run **ChannelFlow Catalog Sync**
 5. Join ChannelFlow-Server and Jellyfin to the **same Docker network** as your PostgreSQL instance
 
 Items removed from Jellyfin, or whose remapped local file is gone, are marked missing, then deleted by **Tasks → Catalog cleanup** after the grace period (default 7 days). **Scan Local Files** checks each catalog path after remap.
@@ -60,8 +60,10 @@ ChannelFlow expects to sit behind Nginx Proxy Manager, SWAG, Caddy, or Traefik o
 
 Optional env vars:
 
-- `FINTV_PUBLIC_URL` — public origin used in M3U/XMLTV when Jellyfin fetches them from the Docker network (example: `https://channelflow.example.duckdns.org`)
-- `FINTV_PATH_BASE` — only if the UI is served under a subpath such as `/channelflow`
+- `CHANNELFLOW_PUBLIC_URL` — public origin used in M3U/XMLTV when Jellyfin fetches them from the Docker network (example: `https://channelflow.example.duckdns.org`)
+- `CHANNELFLOW_PATH_BASE` — only if the UI is served under a subpath such as `/channelflow`
+
+Legacy `FINTV_*` names for those same variables still work.
 
 You can also set **Public base URL** on the General tab. Login cookies stay valid across container rebuilds (keys live in `/config/dataprotection`).
 

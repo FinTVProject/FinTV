@@ -9,7 +9,7 @@ namespace Jellyfin.Plugin.FinTV.Streaming;
 
 /// <summary>
 /// Applies Jellyfin dashboard transcoding settings (hardware acceleration, encoder preset, VAAPI device, etc.)
-/// to FinTV ffmpeg command lines.
+/// to ChannelFlow ffmpeg command lines.
 /// </summary>
 public class JellyfinFfmpegEncodingService
 {
@@ -93,43 +93,46 @@ public class JellyfinFfmpegEncodingService
     }
 
     public string AdaptVideoFilterForEncoder(string filter, string videoEncoder)
-    {
-        if (string.IsNullOrWhiteSpace(filter) || !IsHardwareVideoEncoder(videoEncoder))
-        {
-            return filter;
-        }
-
-        if (filter.Contains("yuv420p", StringComparison.OrdinalIgnoreCase))
-        {
-            return filter.Replace("yuv420p", "nv12", StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (filter.Contains("format=", StringComparison.OrdinalIgnoreCase))
-        {
-            return filter;
-        }
-
-        return filter + ",format=nv12";
-    }
+        => InsertHardwareTail(filter, videoEncoder, labeled: false);
 
     public string AdaptFilterComplexForEncoder(string filter, string videoEncoder)
+        => InsertHardwareTail(filter, videoEncoder, labeled: true);
+
+    private static string InsertHardwareTail(string filter, string videoEncoder, bool labeled)
     {
-        if (string.IsNullOrWhiteSpace(filter) || !IsHardwareVideoEncoder(videoEncoder))
+        if (string.IsNullOrWhiteSpace(filter) || string.IsNullOrWhiteSpace(videoEncoder)
+            || EncodingHelper.IsCopyCodec(videoEncoder)
+            || videoEncoder.StartsWith("lib", StringComparison.OrdinalIgnoreCase))
         {
             return filter;
         }
 
-        if (filter.Contains("yuv420p", StringComparison.OrdinalIgnoreCase))
+        var adapted = filter.Replace("yuv420p", "nv12", StringComparison.OrdinalIgnoreCase);
+        var tail = new List<string>();
+        if (!adapted.Contains("format=nv12", StringComparison.OrdinalIgnoreCase)
+            && !adapted.Contains("format=vaapi", StringComparison.OrdinalIgnoreCase))
         {
-            return filter.Replace("yuv420p", "nv12", StringComparison.OrdinalIgnoreCase);
+            tail.Add("format=nv12");
         }
 
-        if (filter.Contains("format=nv12", StringComparison.OrdinalIgnoreCase))
+        if (videoEncoder.Contains("vaapi", StringComparison.OrdinalIgnoreCase)
+            && !adapted.Contains("hwupload", StringComparison.OrdinalIgnoreCase))
         {
-            return filter;
+            tail.Add("hwupload=extra_hw_frames=64");
         }
 
-        return filter.Replace("[vout]", "format=nv12[vout]", StringComparison.Ordinal);
+        if (tail.Count == 0)
+        {
+            return adapted;
+        }
+
+        var insert = "," + string.Join(",", tail);
+        if (labeled && adapted.Contains("[vout]", StringComparison.Ordinal))
+        {
+            return adapted.Replace("[vout]", insert + "[vout]", StringComparison.Ordinal);
+        }
+
+        return adapted.TrimEnd(',') + insert;
     }
 
     private static bool ShouldUseHardwareVideoEncoding(EncodingOptions options)

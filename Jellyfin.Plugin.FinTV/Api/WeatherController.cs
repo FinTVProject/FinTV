@@ -10,7 +10,7 @@ namespace Jellyfin.Plugin.FinTV.Api;
 /// WeatherStar settings and self-hosted ws4kp/ws3kp Docker management.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/weather")]
+[Route("ChannelFlow/api/weather")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class WeatherController : ControllerBase
 {
@@ -68,7 +68,7 @@ public class WeatherController : ControllerBase
 
             if (request?.UpdateBaseUrl != false)
             {
-                var plugin = Plugin.Instance ?? throw new InvalidOperationException("FinTV plugin not initialized.");
+                var plugin = Plugin.Instance ?? throw new InvalidOperationException("ChannelFlow plugin not initialized.");
                 var status = await _docker.GetStatusAsync(variant, cancellationToken);
                 plugin.Configuration.WeatherStarBaseUrl = status.BaseUrl;
                 plugin.SaveConfiguration();

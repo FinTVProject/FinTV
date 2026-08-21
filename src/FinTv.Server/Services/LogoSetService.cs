@@ -423,7 +423,7 @@ public class LogoSetService
         {
             var byTag = ChannelPresets.Find(libraryTag)
                 ?? ChannelPresets.All.FirstOrDefault(p =>
-                    p.LibraryTag.Equals(libraryTag, StringComparison.OrdinalIgnoreCase));
+                    FilterDefinition.PresetIdsEqual(p.LibraryTag, libraryTag));
             if (byTag is not null)
             {
                 return byTag;
@@ -465,8 +465,8 @@ public class LogoSetService
         if (normalizedName.Contains("newsweather", StringComparison.Ordinal)
             || normalizedName.Contains("newandweather", StringComparison.Ordinal))
         {
-            return ChannelPresets.All.FirstOrDefault(p => p.Id == "fintv-weatherstar4000")
-                ?? ChannelPresets.All.FirstOrDefault(p => p.Id == "fintv-news");
+            return ChannelPresets.All.FirstOrDefault(p => p.Id == "channelflow-weatherstar4000")
+                ?? ChannelPresets.All.FirstOrDefault(p => p.Id == "channelflow-news");
         }
 
         return ChannelPresets.All.FirstOrDefault(p =>
@@ -770,7 +770,7 @@ public class LogoSetService
     private HttpClient CreateGitHubClient()
     {
         var client = _httpClientFactory.CreateClient();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("FinTV-Jellyfin-Plugin");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("ChannelFlow-Jellyfin-Plugin");
         client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return client;
     }

@@ -10,7 +10,7 @@ namespace Jellyfin.Plugin.FinTV.Api;
 /// Recurring day/time presentation overrides for channels.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/special-presentations")]
+[Route("ChannelFlow/api/special-presentations")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class SpecialPresentationsController : ControllerBase
 {

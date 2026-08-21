@@ -105,7 +105,7 @@ public class GuideMetadataService
             return null;
         }
 
-        return $"{baseUrl.TrimEnd('/')}/FinTV/iptv/poster/{posterItemId.Value:N}";
+        return $"{baseUrl.TrimEnd('/')}/ChannelFlow/iptv/poster/{posterItemId.Value:N}";
     }
 
     /// <summary>

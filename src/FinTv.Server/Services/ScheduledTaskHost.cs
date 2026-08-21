@@ -41,7 +41,7 @@ public sealed class ScheduledTaskHost : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Scheduled FinTV task failed");
+                _logger.LogError(ex, "Scheduled ChannelFlow task failed");
             }
         }
     }

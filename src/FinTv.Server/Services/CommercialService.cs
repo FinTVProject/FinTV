@@ -140,14 +140,24 @@ public class CommercialService
     public async Task SyncCommercialLibraryAsync(CancellationToken cancellationToken = default)
     {
         var config = FinTvRuntime.Current?.Configuration;
-        var tag = config?.CommercialLibraryTag ?? "fintv-commercial";
-        var query = new InternalItemsQuery
+        var tags = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            Recursive = true,
-            Tags = new[] { tag }
+            "channelflow-commercial",
+            "fintv-commercial"
         };
+        if (!string.IsNullOrWhiteSpace(config?.CommercialLibraryTag))
+        {
+            tags.Add(config.CommercialLibraryTag);
+        }
 
-        var items = _libraryManager.GetItemsResult(query).Items;
+        var items = tags
+            .SelectMany(tag => _libraryManager.GetItemsResult(new InternalItemsQuery
+            {
+                Recursive = true,
+                Tags = new[] { tag }
+            }).Items)
+            .DistinctBy(item => item.Id)
+            .ToList();
         foreach (var item in items)
         {
             var existing = await _db.Commercials

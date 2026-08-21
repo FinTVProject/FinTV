@@ -167,6 +167,10 @@ public class WeatherStarDockerService
             }
 
             await RemoveStaleContainerAsync(definition.ContainerName, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(definition.LegacyContainerName))
+            {
+                await RemoveStaleContainerAsync(definition.LegacyContainerName, cancellationToken);
+            }
             await StartContainerAsync(variant, _networkResolution.Network, cancellationToken);
             await WaitForHttpReadyAsync(definition, settings, sharesJellyfinNetwork, cancellationToken, throwOnTimeout: true);
 
@@ -215,6 +219,11 @@ public class WeatherStarDockerService
                     .ExecuteAsync(cancellationToken);
             }
 
+            if (!string.IsNullOrWhiteSpace(definition.LegacyContainerName))
+            {
+                await RemoveStaleContainerAsync(definition.LegacyContainerName, cancellationToken);
+            }
+
             return await GetStatusAsync(variant, cancellationToken);
         }
         finally
@@ -261,7 +270,7 @@ public class WeatherStarDockerService
 
     public void UpdateSettings(WeatherStarDockerVariant variant, int? hostPort, string? image)
     {
-        var plugin = Plugin.Instance ?? throw new InvalidOperationException("FinTV plugin not initialized.");
+        var plugin = Plugin.Instance ?? throw new InvalidOperationException("ChannelFlow plugin not initialized.");
         IWeatherStarDockerSettings settings = variant switch
         {
             WeatherStarDockerVariant.Ws4kp => plugin.Configuration.Ws4kp,
@@ -307,7 +316,7 @@ public class WeatherStarDockerService
     }
 
     private static bool UsesSharedJellyfinLoopback()
-        => string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FINTV_DOCKER_NETWORK"))
+        => string.IsNullOrWhiteSpace(Jellyfin.Plugin.FinTV.AppEnvironment.Get("DOCKER_NETWORK"))
             && DockerSidecarNetworkHelper.RunsInsideDocker();
 
     private static int ResolveEffectivePort(
@@ -486,10 +495,10 @@ public class WeatherStarDockerService
         var primaryUrl = BuildBaseUrl(definition, settings, sharesJellyfinNetwork);
         throw new TimeoutException(
             $"WeatherStar container did not become ready at {primaryUrl}. "
-            + $"When Jellyfin runs in Docker, FinTV shares Jellyfin's network namespace so WeatherStar is on loopback "
+            + $"When Jellyfin runs in Docker, ChannelFlow shares Jellyfin's network namespace so WeatherStar is on loopback "
             + $"(e.g. http://127.0.0.1:{definition.ContainerPort}). "
             + $"Verify with `docker logs {definition.ContainerName}`. "
-            + "Set FINTV_JELLYFIN_CONTAINER if auto-detect fails (e.g. Jellyfin on Unraid). "
+            + "Set CHANNELFLOW_JELLYFIN_CONTAINER if auto-detect fails (e.g. Jellyfin on Unraid). "
             + $"Recreate the container after replacing Jellyfin (`docker rm -f {definition.ContainerName}`).");
     }
 
@@ -601,7 +610,7 @@ public class WeatherStarDockerService
         if (staleNetworkAttachment)
         {
             return "Container is attached to an old Jellyfin container network. Click Stop, then Start. "
-                + "If this persists after a Jellyfin container recreate, set FINTV_JELLYFIN_CONTAINER=Jellyfin on the Jellyfin template.";
+                + "If this persists after a Jellyfin container recreate, set CHANNELFLOW_JELLYFIN_CONTAINER=Jellyfin on the Jellyfin template.";
         }
 
         if (httpListeningInsideSidecar)
@@ -625,35 +634,41 @@ public sealed class WeatherStarDockerDefinition
 {
     public static readonly WeatherStarDockerDefinition Ws4kp = new(
         WeatherStarDockerVariant.Ws4kp,
-        "fintv-ws4kp",
+        "channelflow-ws4kp",
         "ghcr.io/netbymatt/ws4kp",
         8080,
-        8080);
+        8080,
+        "fintv-ws4kp");
 
     public static readonly WeatherStarDockerDefinition Ws3kp = new(
         WeatherStarDockerVariant.Ws3kp,
-        "fintv-ws3kp",
+        "channelflow-ws3kp",
         "ghcr.io/netbymatt/ws3kp",
         8083,
-        8083);
+        8083,
+        "fintv-ws3kp");
 
     private WeatherStarDockerDefinition(
         WeatherStarDockerVariant variant,
         string containerName,
         string defaultImage,
         int containerPort,
-        int defaultHostPort)
+        int defaultHostPort,
+        string? legacyContainerName = null)
     {
         Variant = variant;
         ContainerName = containerName;
         DefaultImage = defaultImage;
         ContainerPort = containerPort;
         DefaultHostPort = defaultHostPort;
+        LegacyContainerName = legacyContainerName;
     }
 
     public WeatherStarDockerVariant Variant { get; }
 
     public string ContainerName { get; }
+
+    public string? LegacyContainerName { get; }
 
     public string DefaultImage { get; }
 

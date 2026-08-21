@@ -12,10 +12,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jellyfin.Plugin.FinTV.Api;
 
 /// <summary>
-/// Jellyfin library search helpers for the FinTV admin UI.
+/// Jellyfin library search helpers for the ChannelFlow admin UI.
 /// </summary>
 [ApiController]
-[Route("FinTV/api/catalog")]
+[Route("ChannelFlow/api/catalog")]
 [Authorize(Policy = Policies.RequiresElevation)]
 public class CatalogController : ControllerBase
 {
@@ -26,7 +26,7 @@ public class CatalogController : ControllerBase
     /// Initializes a new instance of the <see cref="CatalogController"/> class.
     /// </summary>
     /// <param name="libraryManager">Library manager.</param>
-    /// <param name="catalog">FinTV catalog service.</param>
+    /// <param name="catalog">ChannelFlow catalog service.</param>
     public CatalogController(ILibraryManager libraryManager, JellyfinCatalogService catalog)
     {
         _libraryManager = libraryManager;
