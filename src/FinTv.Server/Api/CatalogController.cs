@@ -183,58 +183,79 @@ public class CatalogController : ControllerBase
     private async Task<List<object>> ListSyncedLibrariesAsync(CancellationToken cancellationToken)
     {
         var rows = await _db.MediaItems.AsNoTracking()
-            .Select(item => new
-            {
+            .Select(item => new LibraryScanRow(
                 item.Id,
                 item.Name,
                 item.Kind,
+                item.ParentId,
+                item.SeriesId,
                 item.LibraryId,
                 item.LibraryName,
-                item.CollectionType
-            })
+                item.CollectionType))
             .ToListAsync(cancellationToken);
 
-        var byId = new Dictionary<Guid, LibraryListRow>();
-        foreach (var row in rows)
-        {
-            if (row.Kind == BaseItemKind.Folder)
-            {
-                var folder = GetOrAddLibrary(byId, row.Id, row.Name, row.CollectionType);
-                folder.Name = string.IsNullOrWhiteSpace(row.Name) ? folder.Name : row.Name;
-                if (!string.IsNullOrWhiteSpace(row.CollectionType))
-                {
-                    folder.CollectionType = row.CollectionType;
-                }
-            }
+        var itemsById = rows.ToDictionary(row => row.Id);
+        var libraries = new Dictionary<Guid, LibraryListRow>();
 
-            if (row.LibraryId is Guid libraryId)
-            {
-                var library = GetOrAddLibrary(byId, libraryId, row.LibraryName, row.CollectionType);
-                if (row.Kind != BaseItemKind.Folder)
-                {
-                    library.ItemCount++;
-                    library.Kinds.Add(row.Kind);
-                }
-            }
+        foreach (var folder in rows.Where(row => IsJellyfinLibraryFolder(row)))
+        {
+            var library = GetOrAddLibrary(libraries, folder.Id, folder.Name, folder.CollectionType);
+            library.MemberIds.Add(folder.Id);
         }
 
-        foreach (var library in byId.Values)
+        foreach (var row in rows)
+        {
+            if (row.Kind is BaseItemKind.Folder or BaseItemKind.Playlist)
+            {
+                continue;
+            }
+
+            var resolvedId = ResolveLibraryId(row, itemsById);
+            if (resolvedId is null)
+            {
+                continue;
+            }
+
+            itemsById.TryGetValue(resolvedId.Value, out var folder);
+            var name = FirstRealName(folder?.Name, row.LibraryName);
+            var collectionType = FirstRealName(folder?.CollectionType, row.CollectionType);
+            var library = GetOrAddLibrary(libraries, resolvedId.Value, name, collectionType);
+            library.ItemCount++;
+            library.Kinds.Add(row.Kind);
+            if (row.LibraryId is Guid storedId && storedId != Guid.Empty)
+            {
+                library.MemberIds.Add(storedId);
+            }
+
+            library.MemberIds.Add(resolvedId.Value);
+        }
+
+        foreach (var library in libraries.Values)
         {
             if (string.IsNullOrWhiteSpace(library.CollectionType))
             {
                 library.CollectionType = InferCollectionType(library.Kinds);
             }
+
+            library.MemberIds.Add(library.Id);
         }
 
-        return byId.Values
-            .OrderBy(library => library.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(library => (object)new
+        return libraries.Values
+            .Select(library =>
             {
-                id = library.Id,
-                name = library.Name,
-                collectionType = library.CollectionType,
-                groups = LibraryGroupsFor(library.CollectionType),
-                itemCount = library.ItemCount
+                var groups = LibraryGroupsFor(library.CollectionType, library.Kinds);
+                return new { library, groups };
+            })
+            .Where(row => row.groups.Length > 0 && !IsPlaceholderName(row.library.Name))
+            .OrderBy(row => row.library.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(row => (object)new
+            {
+                id = row.library.Id,
+                ids = row.library.MemberIds.OrderBy(id => id).ToArray(),
+                name = row.library.Name,
+                collectionType = row.library.CollectionType,
+                groups = row.groups,
+                itemCount = row.library.ItemCount
             })
             .ToList();
     }
@@ -251,61 +272,142 @@ public class CatalogController : ControllerBase
             byId[id] = library;
         }
 
-        if (string.IsNullOrWhiteSpace(library.Name) && !string.IsNullOrWhiteSpace(name))
-        {
-            library.Name = name.Trim();
-        }
-
-        if (string.IsNullOrWhiteSpace(library.CollectionType) && !string.IsNullOrWhiteSpace(collectionType))
-        {
-            library.CollectionType = collectionType;
-        }
-
+        ApplyLibraryName(library, name);
+        ApplyCollectionType(library, collectionType);
         return library;
     }
 
-    private static string[] LibraryGroupsFor(string? collectionType)
+    private static void ApplyLibraryName(LibraryListRow library, string? name)
     {
-        var type = (collectionType ?? string.Empty).Trim().ToLowerInvariant();
+        if (IsPlaceholderName(library.Name) && !IsPlaceholderName(name))
+        {
+            library.Name = name!.Trim();
+        }
+    }
+
+    private static void ApplyCollectionType(LibraryListRow library, string? collectionType)
+    {
+        if (string.IsNullOrWhiteSpace(library.CollectionType) && !string.IsNullOrWhiteSpace(collectionType))
+        {
+            library.CollectionType = collectionType.Trim();
+        }
+    }
+
+    private static bool IsPlaceholderName(string? name)
+        => string.IsNullOrWhiteSpace(name)
+            || name.Equals("Library", StringComparison.OrdinalIgnoreCase);
+
+    private static string? FirstRealName(params string?[] values)
+        => values.FirstOrDefault(value => !IsPlaceholderName(value))?.Trim();
+
+    private static bool IsJellyfinLibraryFolder(LibraryScanRow row)
+    {
+        if (row.Kind != BaseItemKind.Folder || IsPlaceholderName(row.Name))
+        {
+            return false;
+        }
+
+        return IsKnownLibraryType(row.CollectionType)
+            || row.ParentId is null
+            || row.ParentId == Guid.Empty;
+    }
+
+    private static Guid? ResolveLibraryId(LibraryScanRow row, IReadOnlyDictionary<Guid, LibraryScanRow> itemsById)
+    {
+        return WalkToLibraryFolder(row.LibraryId, itemsById)
+            ?? WalkToLibraryFolder(row.ParentId, itemsById)
+            ?? WalkToLibraryFolder(row.SeriesId, itemsById)
+            ?? (row.LibraryId is Guid libraryId && libraryId != Guid.Empty ? libraryId : null);
+    }
+
+    private static Guid? WalkToLibraryFolder(Guid? start, IReadOnlyDictionary<Guid, LibraryScanRow> itemsById)
+    {
+        var current = start;
+        Guid? lastFolder = null;
+        var seen = new HashSet<Guid>();
+        while (current is Guid id && id != Guid.Empty && seen.Add(id))
+        {
+            if (!itemsById.TryGetValue(id, out var node))
+            {
+                break;
+            }
+
+            if (node.Kind == BaseItemKind.Folder)
+            {
+                lastFolder = node.Id;
+                if (IsJellyfinLibraryFolder(node))
+                {
+                    return node.Id;
+                }
+            }
+
+            current = node.ParentId is Guid parent && parent != Guid.Empty
+                ? parent
+                : node.SeriesId;
+        }
+
+        return lastFolder;
+    }
+
+    private static bool IsKnownLibraryType(string? collectionType)
+        => LibraryGroupForType(collectionType) is not null;
+
+    private static string? LibraryGroupForType(string? collectionType)
+    {
+        var type = (collectionType ?? string.Empty).Trim().ToLowerInvariant().Replace(" ", string.Empty);
         return type switch
         {
-            "tvshows" or "tv" or "series" => new[] { "tv" },
-            "movies" or "movie" => new[] { "movies" },
-            "music" => new[] { "music" },
-            "musicvideos" or "musicvideo" => new[] { "musicvideos" },
-            _ => new[] { "tv", "movies", "music", "musicvideos" }
+            "tvshows" or "tvshow" or "tv" or "series" or "shows" => "tv",
+            "movies" or "movie" => "movies",
+            "music" or "audio" => "music",
+            "musicvideos" or "musicvideo" => "musicvideos",
+            _ => null
         };
+    }
+
+    private static string[] LibraryGroupsFor(string? collectionType, HashSet<BaseItemKind> kinds)
+    {
+        var fromType = LibraryGroupForType(collectionType);
+        if (fromType is not null)
+        {
+            return [fromType];
+        }
+
+        var groups = new List<string>();
+        if (kinds.Any(kind => kind is BaseItemKind.Series or BaseItemKind.Episode))
+        {
+            groups.Add("tv");
+        }
+
+        if (kinds.Any(kind => kind is BaseItemKind.Movie or BaseItemKind.Video))
+        {
+            groups.Add("movies");
+        }
+
+        if (kinds.Contains(BaseItemKind.Audio))
+        {
+            groups.Add("music");
+        }
+
+        if (kinds.Contains(BaseItemKind.MusicVideo))
+        {
+            groups.Add("musicvideos");
+        }
+
+        return groups.ToArray();
     }
 
     private static string? InferCollectionType(HashSet<BaseItemKind> kinds)
     {
-        var content = kinds.Where(kind => kind is not BaseItemKind.Folder and not BaseItemKind.Playlist).ToHashSet();
-        if (content.Count == 0)
+        var groups = LibraryGroupsFor(null, kinds);
+        return groups.Length switch
         {
-            return null;
-        }
-
-        if (content.All(kind => kind is BaseItemKind.Series or BaseItemKind.Episode))
-        {
-            return "tvshows";
-        }
-
-        if (content.All(kind => kind == BaseItemKind.Movie))
-        {
-            return "movies";
-        }
-
-        if (content.All(kind => kind == BaseItemKind.Audio))
-        {
-            return "music";
-        }
-
-        if (content.All(kind => kind == BaseItemKind.MusicVideo))
-        {
-            return "musicvideos";
-        }
-
-        return null;
+            1 when groups[0] == "tv" => "tvshows",
+            1 when groups[0] == "movies" => "movies",
+            1 when groups[0] == "music" => "music",
+            1 when groups[0] == "musicvideos" => "musicvideos",
+            _ => null
+        };
     }
 
     private static object MapSearchResult(BaseItem item)
@@ -340,14 +442,26 @@ public class CatalogController : ControllerBase
     {
         public Guid Id { get; set; }
 
-        public string Name { get; set; } = "Library";
+        public string Name { get; set; } = string.Empty;
 
         public string? CollectionType { get; set; }
 
         public int ItemCount { get; set; }
 
         public HashSet<BaseItemKind> Kinds { get; } = new();
+
+        public HashSet<Guid> MemberIds { get; } = new();
     }
+
+    private sealed record LibraryScanRow(
+        Guid Id,
+        string? Name,
+        BaseItemKind Kind,
+        Guid? ParentId,
+        Guid? SeriesId,
+        Guid? LibraryId,
+        string? LibraryName,
+        string? CollectionType);
 }
 
 /// <summary>

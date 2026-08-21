@@ -4178,8 +4178,17 @@
         }
 
         return Array.from(el.querySelectorAll('input[type="checkbox"]:checked'))
-            .map((input) => input.dataset.libId)
+            .flatMap((input) => String(input.dataset.libIds || input.dataset.libId || '').split(','))
+            .map((id) => id.trim())
             .filter(Boolean);
+    }
+
+    function libraryMemberIds(lib) {
+        if (Array.isArray(lib.ids) && lib.ids.length) {
+            return lib.ids.map(String);
+        }
+
+        return lib.id ? [String(lib.id)] : [];
     }
 
     function renderJellyfinLibraryGroup(containerId, libraries, selectedIds, group) {
@@ -4197,9 +4206,10 @@
         const selected = new Set((selectedIds || []).map(String));
         el.innerHTML = matching.map((lib) => {
             const count = lib.itemCount || 0;
-            const checked = selected.has(String(lib.id)) ? ' checked' : '';
+            const memberIds = libraryMemberIds(lib);
+            const checked = memberIds.some((id) => selected.has(id)) ? ' checked' : '';
             return `<label class="field checkbox-field">
-                <input type="checkbox" data-lib-id="${escapeHtml(lib.id)}"${checked}>
+                <input type="checkbox" data-lib-id="${escapeHtml(String(lib.id || memberIds[0] || ''))}" data-lib-ids="${escapeHtml(memberIds.join(','))}"${checked}>
                 <span class="fintv-check-box" aria-hidden="true"></span>
                 <span>${escapeHtml(lib.name)} <span class="library-pick-meta">${count} item${count === 1 ? '' : 's'}</span></span>
             </label>`;
