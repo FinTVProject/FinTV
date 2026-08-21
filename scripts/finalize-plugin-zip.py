@@ -16,7 +16,9 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILD_YAML = ROOT / "build.yaml"
+BUILD_YAML = ROOT / "plugin" / "build.yaml"
+if not BUILD_YAML.is_file():
+    BUILD_YAML = ROOT / "build.yaml"
 IMAGE_RESOURCE = "Jellyfin.Plugin.FinTV.logo.png"
 
 

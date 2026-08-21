@@ -50,16 +50,8 @@ jobs:
       - name: Install JPRM
         run: python -m pip install --upgrade jprm
 
-      - name: Fetch bundled Binarygeek119 logos
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 scripts/fetch-binarygeek119-logos.py Jellyfin.Plugin.FinTV/Assets/logos/binarygeek119
-
       - name: Restore NuGet packages
-        run: dotnet restore Jellyfin.Plugin.FinTV/Jellyfin.Plugin.FinTV.csproj
-
-      - name: Update build.yaml logo artifacts
-        run: python3 scripts/update-build-artifacts.py
+        run: dotnet restore plugin/Jellyfin.Plugin.FinTV/Jellyfin.Plugin.FinTV.csproj
 
       - name: Build plugin zip
         id: build
@@ -67,7 +59,7 @@ jobs:
           tag="${{ steps.release.outputs.tag }}"
           version="${tag#v}"
           mkdir -p ./artifacts
-          zipfile=$(jprm --verbosity=debug plugin build . --version "$version" --output ./artifacts --dotnet-configuration Release --dotnet-framework net10.0)
+          zipfile=$(jprm --verbosity=debug plugin build ./plugin --version "$version" --output ./artifacts --dotnet-configuration Release --dotnet-framework net10.0)
           echo "zipfile=$zipfile" >> "$GITHUB_OUTPUT"
           echo "Built artifact: $zipfile"
 

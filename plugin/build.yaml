@@ -14,11 +14,9 @@ category: "LiveTV"
 assemblies:
   - "Jellyfin.Plugin.FinTV.dll"
   - "CliWrap.dll"
-  - "Microsoft.Bcl.AsyncInterfaces.dll"
 artifacts:
   - "Jellyfin.Plugin.FinTV.dll"
   - "CliWrap.dll"
-  - "Microsoft.Bcl.AsyncInterfaces.dll"
 changelog: |-
   - Split FinTV into FinTV Server plus a thin Jellyfin plugin
   - Sync library metadata, file paths, and chapters to FinTV Server
