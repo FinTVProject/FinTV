@@ -68,7 +68,7 @@ public sealed class WeatherStarAssets : IDisposable
             }
         }
 
-        var fallback = SKTypeface.FromFamilyName("DejaVu Sans", SKFontStyle.Bold) ?? SKTypeface.Default;
+        var fallback = SKTypeface.FromFamilyName("DejaVu Sans", SKFontStyle.Bold);
         _typefaces[key] = fallback;
         return fallback;
     }

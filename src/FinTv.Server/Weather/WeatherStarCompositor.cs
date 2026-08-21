@@ -30,7 +30,7 @@ public sealed class WeatherStarCompositor
         var bg = _assets.Background(skin, wide, screen);
         if (bg is not null)
         {
-            canvas.DrawBitmap(bg, new SKRect(0, 0, width, height));
+            DrawBitmap(canvas, bg, new SKRect(0, 0, width, height));
         }
 
         var font = _assets.Font(skin);
@@ -106,7 +106,7 @@ public sealed class WeatherStarCompositor
         var icon = _assets.Icon(cur.IconKey);
         if (icon is not null)
         {
-            canvas.DrawBitmap(icon, new SKRect(width - 220, 80, width - 24, 260));
+            DrawBitmap(canvas, icon, new SKRect(width - 220, 80, width - 24, 260));
         }
 
         var y = 250;
@@ -157,7 +157,7 @@ public sealed class WeatherStarCompositor
             var icon = _assets.Icon(day.IconKey);
             if (icon is not null)
             {
-                canvas.DrawBitmap(icon, new SKRect(width - 70, y - 22, width - 18, y + 26));
+                DrawBitmap(canvas, icon, new SKRect(width - 70, y - 22, width - 18, y + 26));
             }
 
             var narrative = day.Narrative.Length > 90 ? day.Narrative[..87] + "..." : day.Narrative;
@@ -198,7 +198,7 @@ public sealed class WeatherStarCompositor
         using var bmp = SKBitmap.Decode(frame.Image);
         if (bmp is not null)
         {
-            canvas.DrawBitmap(bmp, new SKRect(20, 70, width - 20, height - 40));
+            DrawBitmap(canvas, bmp, new SKRect(20, 70, width - 20, height - 40));
         }
 
         DrawText(canvas, frame.Time.ToLocalTime().ToString("h:mm tt", CultureInfo.InvariantCulture), font, 16, 24, height - 18, white);
@@ -221,6 +221,11 @@ public sealed class WeatherStarCompositor
             WeatherStarScreen.SpcOutlook => "STORM OUTLOOK",
             _ => "WEATHER"
         };
+
+    private static readonly SKSamplingOptions BitmapSampling = new(SKFilterMode.Linear);
+
+    private static void DrawBitmap(SKCanvas canvas, SKBitmap bitmap, SKRect dest)
+        => canvas.DrawBitmap(bitmap, dest, BitmapSampling);
 
     private static void DrawText(SKCanvas canvas, string text, SKTypeface typeface, float size, float x, float y, SKPaint color)
     {
