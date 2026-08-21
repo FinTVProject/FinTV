@@ -18,6 +18,8 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
     private long _nextId = 1;
     private readonly Dictionary<long, TaskCompletionSource<JsonElement>> _pending = new();
     private CancellationTokenSource? _readCts;
+    private readonly StringBuilder _capturedOutput = new();
+    private const int MaxCapturedOutput = 8000;
 
     public ChromiumCdpCapture(ILogger logger)
     {
@@ -26,18 +28,31 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
 
     public static string? FindChromium()
     {
+        var candidates = new List<string>();
         var configured = Environment.GetEnvironmentVariable("CHROMIUM_PATH");
-        if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+        if (!string.IsNullOrWhiteSpace(configured))
         {
-            return configured;
+            candidates.Add(configured.Trim());
         }
 
-        foreach (var name in new[] { "chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "chrome" })
+        candidates.Add("/usr/local/bin/fintv-chromium");
+        candidates.Add("/usr/lib/chromium/chromium");
+        candidates.Add("/usr/lib/chromium-browser/chromium");
+        candidates.Add("/opt/google/chrome/chrome");
+        foreach (var name in new[] { "chromium", "google-chrome", "google-chrome-stable", "chrome", "chromium-browser" })
         {
             var found = FindOnPath(name);
             if (found is not null)
             {
-                return found;
+                candidates.Add(found);
+            }
+        }
+
+        foreach (var candidate in candidates.Distinct(StringComparer.Ordinal))
+        {
+            if (IsUsableChromium(candidate))
+            {
+                return candidate;
             }
         }
 
@@ -46,16 +61,19 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
 
     public async Task StartAsync(string pageUrl, int width, int height, CancellationToken cancellationToken)
     {
-        var chrome = FindChromium() ?? throw new FileNotFoundException("Chromium was not found. Set CHROMIUM_PATH or install chromium.");
+        var chrome = FindChromium() ?? throw new FileNotFoundException(
+            "Chromium was not found. Install the chromium package (not the Ubuntu snap stub) or set CHROMIUM_PATH to the real binary.");
+        _logger.LogInformation("Starting WeatherStar Chromium from {Path}", chrome);
         var port = GetFreeTcpPort();
         var userData = Path.Combine(Path.GetTempPath(), "fintv-chrome-" + port);
         Directory.CreateDirectory(userData);
+        _capturedOutput.Clear();
         _chromium = Process.Start(new ProcessStartInfo
         {
             FileName = chrome,
             UseShellExecute = false,
-            RedirectStandardError = false,
-            RedirectStandardOutput = false,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
             ArgumentList =
             {
                 "--headless",
@@ -76,9 +94,16 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
             }
         }) ?? throw new InvalidOperationException("Failed to start Chromium.");
 
+        _chromium.OutputDataReceived += (_, args) => CaptureProcessOutput(args.Data);
+        _chromium.ErrorDataReceived += (_, args) => CaptureProcessOutput(args.Data);
+        _chromium.BeginOutputReadLine();
+        _chromium.BeginErrorReadLine();
+
+        await Task.Delay(400, cancellationToken);
         if (_chromium.HasExited)
         {
-            throw new InvalidOperationException("Chromium exited immediately. Exit code " + _chromium.ExitCode + ".");
+            throw new InvalidOperationException(
+                "Chromium exited immediately. Exit code " + _chromium.ExitCode + "." + FormatCapturedOutput());
         }
 
         var wsUrl = await WaitForPageDebuggerUrlAsync(port, pageUrl, cancellationToken);
@@ -273,7 +298,7 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
         }
     }
 
-    private static async Task<string> WaitForPageDebuggerUrlAsync(int port, string pageUrl, CancellationToken cancellationToken)
+    private async Task<string> WaitForPageDebuggerUrlAsync(int port, string pageUrl, CancellationToken cancellationToken)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         var deadline = DateTime.UtcNow.AddSeconds(30);
@@ -281,6 +306,12 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (_chromium?.HasExited == true)
+            {
+                throw new InvalidOperationException(
+                    "Chromium exited before DevTools was ready. Exit code " + _chromium.ExitCode + "." + FormatCapturedOutput());
+            }
+
             try
             {
                 using var version = await http.GetAsync($"http://127.0.0.1:{port}/json/version", cancellationToken);
@@ -302,7 +333,80 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
             }
         }
 
-        throw new TimeoutException("Chromium DevTools did not become ready.", last);
+        throw new TimeoutException(
+            "Chromium DevTools did not become ready." + FormatCapturedOutput(),
+            last);
+    }
+
+    private void CaptureProcessOutput(string? line)
+    {
+        if (string.IsNullOrEmpty(line))
+        {
+            return;
+        }
+
+        lock (_capturedOutput)
+        {
+            if (_capturedOutput.Length >= MaxCapturedOutput)
+            {
+                return;
+            }
+
+            _capturedOutput.AppendLine(line);
+        }
+    }
+
+    private string FormatCapturedOutput()
+    {
+        lock (_capturedOutput)
+        {
+            var text = _capturedOutput.ToString().Trim();
+            return string.IsNullOrEmpty(text) ? string.Empty : " Chromium output: " + text;
+        }
+    }
+
+    private static bool IsUsableChromium(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var resolved = path;
+            for (var i = 0; i < 6; i++)
+            {
+                var link = File.ResolveLinkTarget(resolved, returnFinalTarget: false);
+                if (link is null)
+                {
+                    break;
+                }
+
+                resolved = link.FullName;
+            }
+
+            using var stream = File.OpenRead(resolved);
+            var header = new byte[Math.Min(2048, Math.Max(4, (int)stream.Length))];
+            var read = stream.Read(header, 0, header.Length);
+            if (read >= 4 && header[0] == 0x7F && header[1] == (byte)'E' && header[2] == (byte)'L' && header[3] == (byte)'F')
+            {
+                return true;
+            }
+
+            var text = Encoding.UTF8.GetString(header, 0, read);
+            if (text.Contains("snap install chromium", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("requires the chromium snap", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return text.StartsWith("#!", StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static int GetFreeTcpPort()

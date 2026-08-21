@@ -28,7 +28,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         vainfo \
     && rm -rf /var/lib/apt/lists/* \
     && wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
-    && chmod +x /usr/local/bin/yt-dlp
+    && chmod +x /usr/local/bin/yt-dlp \
+    && if [ -x /usr/lib/chromium/chromium ]; then ln -sfn /usr/lib/chromium/chromium /usr/local/bin/fintv-chromium; \
+       elif [ -x /usr/bin/chromium ]; then ln -sfn /usr/bin/chromium /usr/local/bin/fintv-chromium; \
+       else ln -sfn "$(command -v chromium)" /usr/local/bin/fintv-chromium; fi
 
 WORKDIR /app
 COPY --from=build /app/publish .
@@ -42,7 +45,7 @@ WORKDIR /app
 ENV FINTV_CONFIG=/config \
     FFMPEG_PATH=/usr/bin/ffmpeg \
     FINTV_YTDLP_PATH=/usr/local/bin/yt-dlp \
-    CHROMIUM_PATH=/usr/bin/chromium \
+    CHROMIUM_PATH=/usr/local/bin/fintv-chromium \
     FFMPEG_HWACCEL=vaapi \
     FFMPEG_VAAPI_DEVICE=/dev/dri/renderD128 \
     PORT=8097
