@@ -19,5 +19,3 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Publish server
         run: dotnet publish src/FinTv.Server/FinTv.Server.csproj -c Release /p:SkipLogoFetch=true
-      - name: Build plugin
-        run: dotnet build plugin/Jellyfin.Plugin.FinTV/Jellyfin.Plugin.FinTV.csproj -c Release

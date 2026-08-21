@@ -6,13 +6,13 @@
   <Network>bridge</Network>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/binarygeek119/FinTV</Support>
-  <Project>https://github.com/binarygeek119/FinTV</Project>
+  <Support>https://github.com/FinTVProject/FinTV</Support>
+  <Project>https://github.com/FinTVProject/FinTV</Project>
   <Overview>FinTV Server — simulated live TV channels, EPG, commercials, WeatherStar, and news for Jellyfin. Pair with the FinTV plugin and a PostgreSQL container on the same Docker network.</Overview>
   <Category>MediaApp:Video</Category>
   <WebUI>http://[IP]:[PORT:8097]</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/binarygeek119/FinTV/master/unraid/fintv-server.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/binarygeek119/FinTV/master/logo.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/FinTVProject/FinTV/master/unraid/fintv-server.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/FinTVProject/FinTV/master/logo.png</Icon>
   <Config Name="Web UI" Target="8097" Default="8097" Mode="tcp" Description="Web UI, admin API, M3U/XMLTV/stream" Type="Port" Display="always" Required="true" Mask="false">8097</Config>
   <Config Name="Appdata" Target="/config" Default="/mnt/user/appdata/fintv-server" Mode="rw" Description="Logos, caches, weather/news working files" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/fintv-server</Config>
   <Config Name="Media" Target="/media" Default="/mnt/user/media" Mode="rw" Description="Same library share Jellyfin uses" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media</Config>

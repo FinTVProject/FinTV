@@ -6,7 +6,7 @@
 
 Simulated live TV for [Jellyfin](https://jellyfin.org). This repository is **FinTV Server** — a .NET 10 Docker app with a red Jellyfin-style Web UI, PostgreSQL, local library playback, WeatherStar, and news.
 
-The Jellyfin plugin is a thin bridge in [binarygeek119/FinTV-Plugin](https://github.com/binarygeek119/FinTV-Plugin) (same plugin GUID). It syncs library metadata/paths/chapters, registers Live TV M3U + XMLTV, and runs blackframe chapter detection.
+The Jellyfin plugin is a thin bridge in [FinTVProject/FinTV-Plugin](https://github.com/FinTVProject/FinTV-Plugin) (same plugin GUID). It syncs library metadata/paths/chapters, registers Live TV M3U + XMLTV, and runs blackframe chapter detection.
 
 ## What runs where
 
