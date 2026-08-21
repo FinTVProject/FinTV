@@ -16,6 +16,8 @@ services:
       TZ: ${TZ:-America/Chicago}
       FFMPEG_HWACCEL: ${FFMPEG_HWACCEL:-vaapi}
       FFMPEG_VAAPI_DEVICE: ${FFMPEG_VAAPI_DEVICE:-/dev/dri/renderD128}
+      FINTV_PUBLIC_URL: ${FINTV_PUBLIC_URL:-}
+      FINTV_PATH_BASE: ${FINTV_PATH_BASE:-}
     devices:
       - /dev/dri:/dev/dri
     volumes:

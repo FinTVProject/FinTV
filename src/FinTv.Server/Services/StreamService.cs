@@ -50,38 +50,22 @@ public class StreamService
 
         if (channel.ContentType == ChannelContentType.Weather)
         {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await weather.StreamAsync(channel, output, cancellationToken);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    _logger.LogError(ex, "Weather stream failed for {Channel}; retrying in 5 seconds", channel.Name);
-                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
-                }
-            }
-
+            await StreamUntilCanceledAsync(
+                "Weather",
+                channel.Name,
+                () => weather.StreamAsync(channel, output, cancellationToken),
+                cancellationToken);
             return;
         }
 
         if (channel.ContentType == ChannelContentType.News)
         {
             var news = scope.ServiceProvider.GetRequiredService<NewsChannelService>();
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await news.StreamAsync(channel, output, cancellationToken);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    _logger.LogError(ex, "News stream failed for {Channel}; retrying in 5 seconds", channel.Name);
-                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
-                }
-            }
-
+            await StreamUntilCanceledAsync(
+                "News",
+                channel.Name,
+                () => news.StreamAsync(channel, output, cancellationToken),
+                cancellationToken);
             return;
         }
 
@@ -89,6 +73,7 @@ public class StreamService
 
         while (!cancellationToken.IsCancellationRequested)
         {
+            var started = DateTime.UtcNow;
             var current = await GetCurrentItemAsync(channelId, cancellationToken);
             if (current is not null)
             {
@@ -116,13 +101,62 @@ public class StreamService
                     _logger.LogError(ex, "Failed streaming item {Title}", current.Title);
                     await WriteEbsAsync(channel, ebs, ffmpegPath, output, 120, cancellationToken);
                 }
+            }
+            else
+            {
+                var ebsDuration = await GetEbsDurationSecondsAsync(channelId, cancellationToken);
+                await WriteEbsAsync(channel, ebs, ffmpegPath, output, ebsDuration, cancellationToken);
+            }
 
+            await DelayIfStreamEndedImmediatelyAsync(channel.Name, started, cancellationToken);
+        }
+    }
+
+    private async Task StreamUntilCanceledAsync(
+        string kind,
+        string channelName,
+        Func<Task> stream,
+        CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var started = DateTime.UtcNow;
+            try
+            {
+                await stream();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "{Kind} stream failed for {Channel}; retrying in 5 seconds", kind, channelName);
+                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
                 continue;
             }
 
-            var ebsDuration = await GetEbsDurationSecondsAsync(channelId, cancellationToken);
-            await WriteEbsAsync(channel, ebs, ffmpegPath, output, ebsDuration, cancellationToken);
+            await DelayIfStreamEndedImmediatelyAsync(channelName, started, cancellationToken);
         }
+    }
+
+    private async Task DelayIfStreamEndedImmediatelyAsync(
+        string channelName,
+        DateTime startedUtc,
+        CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        var elapsed = DateTime.UtcNow - startedUtc;
+        if (elapsed >= TimeSpan.FromSeconds(3))
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "Stream ended after {ElapsedMs:0}ms for {Channel}; retrying in 5 seconds",
+            elapsed.TotalMilliseconds,
+            channelName);
+        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
     }
 
     public async Task<PlayoutItem?> GetCurrentItemAsync(Guid channelId, CancellationToken cancellationToken = default)

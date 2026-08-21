@@ -72,22 +72,83 @@ public sealed class NewsChannelService
             cancellationToken);
 
         var musicPath = ResolveNewsMusicPath(settings);
+        var args = BuildAssEncodeArgs(width, height, assPath, musicPath, speechPath);
+        AppendMux(args, duration, mpegts: true, filePath: null);
+
+        var result = await RunFfmpegAsync(args, output, cancellationToken);
+        if (result != 0 && !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("News ffmpeg with ASS overlay exited {Code}; using drawtext fallback", result);
+            await StreamDrawtextFallbackAsync(channel, header, articles, musicPath, speechPath, duration, output, cancellationToken);
+        }
+    }
+
+    public async Task<bool> RenderBulletinFileAsync(
+        NewsSettings settings,
+        IReadOnlyList<NewsArticle> articles,
+        string header,
+        string workDir,
+        string outputMp4,
+        CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(workDir);
+        Directory.CreateDirectory(Path.GetDirectoryName(outputMp4)!);
+
+        string? speechPath = null;
+        if (settings.TtsEnabled && articles.Count > 0)
+        {
+            var script = BuildScript(header, articles, settings);
+            speechPath = await _tts.SynthesizeAsync(script, settings.Voice, workDir, cancellationToken);
+        }
+
+        var duration = 90;
+        if (!string.IsNullOrWhiteSpace(speechPath) && File.Exists(speechPath))
+        {
+            var speechSeconds = await _tts.ProbeDurationSecondsAsync(speechPath, cancellationToken);
+            if (speechSeconds > 1)
+            {
+                duration = (int)Math.Clamp(Math.Ceiling(speechSeconds) + 4, 45, 240);
+            }
+        }
+
+        const int width = 1280;
+        const int height = 720;
+        var assPath = Path.Combine(workDir, "news.ass");
+        await File.WriteAllTextAsync(
+            assPath,
+            NewsAssBuilder.Build(header, articles, width, height, duration, settings.ShowHeader),
+            cancellationToken);
+
+        var musicPath = ResolveNewsMusicPath(settings);
+        var args = BuildAssEncodeArgs(width, height, assPath, musicPath, speechPath);
+        AppendMux(args, duration, mpegts: false, filePath: outputMp4);
+        var exit = await RunFfmpegAsync(args, output: null, cancellationToken);
+        if (exit != 0 && !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("News bulletin ASS encode exited {Code}; using drawtext fallback", exit);
+            var fallback = BuildDrawtextArgs(header, articles, musicPath, speechPath, duration, width, height);
+            AppendMux(fallback, duration, mpegts: false, filePath: outputMp4);
+            exit = await RunFfmpegAsync(fallback, output: null, cancellationToken);
+        }
+
+        return exit == 0 && File.Exists(outputMp4) && new FileInfo(outputMp4).Length > 1024;
+    }
+
+    private List<string> BuildAssEncodeArgs(
+        int width,
+        int height,
+        string assPath,
+        string? musicPath,
+        string? speechPath)
+    {
         var assFilter = NewsAssBuilder.EscapeAssFilterPath(assPath);
         var args = new List<string>
         {
-            "-hide_banner", "-loglevel", "warning"
+            "-hide_banner", "-loglevel", "warning", "-y"
         };
         args.AddRange(_encoding.HardwareDeviceArgs);
         args.AddRange(["-f", "lavfi", "-i", $"color=c=0x101010:s={width}x{height}:r=30"]);
-
-        if (!string.IsNullOrWhiteSpace(musicPath) && File.Exists(musicPath))
-        {
-            args.AddRange(["-stream_loop", "-1", "-i", musicPath]);
-        }
-        else
-        {
-            args.AddRange(["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]);
-        }
+        AppendAudioBed(args, musicPath);
 
         var hasSpeech = !string.IsNullOrWhiteSpace(speechPath) && File.Exists(speechPath);
         if (hasSpeech)
@@ -107,24 +168,53 @@ public sealed class NewsChannelService
         }
 
         _encoding.AppendVideoEncoder(args, stillImage: true);
-        args.AddRange([
-            "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000",
-            "-t", duration.ToString(),
-            "-f", "mpegts", "-mpegts_flags", "+resend_headers",
-            "-flush_packets", "1", "pipe:1"
-        ]);
+        args.AddRange(["-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000"]);
+        return args;
+    }
 
-            var result = await Cli.Wrap(_ffmpegLocator.EncoderPath)
+    private static void AppendAudioBed(List<string> args, string? musicPath)
+    {
+        if (!string.IsNullOrWhiteSpace(musicPath) && File.Exists(musicPath))
+        {
+            args.AddRange(["-stream_loop", "-1", "-i", musicPath]);
+        }
+        else
+        {
+            args.AddRange(["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]);
+        }
+    }
+
+    private static void AppendMux(List<string> args, int duration, bool mpegts, string? filePath)
+    {
+        args.AddRange(["-t", duration.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+        if (mpegts)
+        {
+            args.AddRange(["-f", "mpegts", "-mpegts_flags", "+resend_headers", "-flush_packets", "1", "pipe:1"]);
+            return;
+        }
+
+        args.AddRange(["-f", "mp4", "-movflags", "+faststart", filePath!]);
+    }
+
+    private async Task<int> RunFfmpegAsync(IReadOnlyList<string> args, Stream? output, CancellationToken cancellationToken)
+    {
+        var stderr = new System.Text.StringBuilder();
+        var command = Cli.Wrap(_ffmpegLocator.EncoderPath)
             .WithArguments(args)
-            .WithStandardOutputPipe(PipeTarget.ToStream(output, autoFlush: true))
-            .WithValidation(CommandResultValidation.None)
-            .ExecuteAsync(cancellationToken);
+            .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr))
+            .WithValidation(CommandResultValidation.None);
+        if (output is not null)
+        {
+            command = command.WithStandardOutputPipe(PipeTarget.ToStream(output, autoFlush: true));
+        }
 
+        var result = await command.ExecuteAsync(cancellationToken);
         if (result.ExitCode != 0 && !cancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning("News ffmpeg with ASS overlay exited {Code}; using drawtext fallback", result.ExitCode);
-            await StreamDrawtextFallbackAsync(channel, header, articles, musicPath, speechPath, duration, output, cancellationToken);
+            _logger.LogWarning("News ffmpeg exited {Code}: {Error}", result.ExitCode, stderr.ToString().Trim());
         }
+
+        return result.ExitCode;
     }
 
     private async Task StreamDrawtextFallbackAsync(
@@ -138,6 +228,21 @@ public sealed class NewsChannelService
         CancellationToken cancellationToken)
     {
         var (width, height) = channel.AspectRatio == AspectRatioMode.FourThree ? (640, 480) : (1280, 720);
+        var args = BuildDrawtextArgs(header, articles, musicPath, speechPath, duration, width, height);
+        AppendMux(args, duration, mpegts: true, filePath: null);
+        await RunFfmpegAsync(args, output, cancellationToken);
+    }
+
+    private List<string> BuildDrawtextArgs(
+        string header,
+        IReadOnlyList<NewsArticle> articles,
+        string? musicPath,
+        string? speechPath,
+        int duration,
+        int width,
+        int height)
+    {
+        _ = duration;
         var scroll = EscapeDraw(string.Join("   •   ", articles.Select(a => a.Title).DefaultIfEmpty("No headlines loaded")));
         var vf = _encoding.AdaptVideoFilterForEncoder(
             $"drawbox=x=0:y=0:w=iw:h=90:color=0xe11d48@0.92:t=fill," +
@@ -148,18 +253,11 @@ public sealed class NewsChannelService
 
         var args = new List<string>
         {
-            "-hide_banner", "-loglevel", "warning"
+            "-hide_banner", "-loglevel", "warning", "-y"
         };
         args.AddRange(_encoding.HardwareDeviceArgs);
         args.AddRange(["-f", "lavfi", "-i", $"color=c=0x101010:s={width}x{height}:r=30"]);
-        if (!string.IsNullOrWhiteSpace(musicPath) && File.Exists(musicPath))
-        {
-            args.AddRange(["-stream_loop", "-1", "-i", musicPath]);
-        }
-        else
-        {
-            args.AddRange(["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]);
-        }
+        AppendAudioBed(args, musicPath);
 
         if (!string.IsNullOrWhiteSpace(speechPath) && File.Exists(speechPath))
         {
@@ -173,21 +271,17 @@ public sealed class NewsChannelService
         }
 
         _encoding.AppendVideoEncoder(args, stillImage: true);
-        args.AddRange([
-            "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000",
-            "-t", duration.ToString(),
-            "-f", "mpegts", "pipe:1"
-        ]);
-
-        await Cli.Wrap(_ffmpegLocator.EncoderPath)
-            .WithArguments(args)
-            .WithStandardOutputPipe(PipeTarget.ToStream(output, autoFlush: true))
-            .WithValidation(CommandResultValidation.None)
-            .ExecuteAsync(cancellationToken);
+        args.AddRange(["-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000"]);
+        return args;
     }
 
     private string? ResolveNewsMusicPath(NewsSettings settings)
     {
+        if (IsNoMusic(settings))
+        {
+            return null;
+        }
+
         var tracks = !string.IsNullOrWhiteSpace(settings.MusicLibraryId) || !string.IsNullOrWhiteSpace(settings.MusicLibraryName)
             ? _catalog.QueryMusicAudioFromLibrary(settings.MusicLibraryId, settings.MusicLibraryName)
             : [];
@@ -197,6 +291,20 @@ public sealed class NewsChannelService
         }
 
         return _catalog.GetMediaPath(tracks[Random.Shared.Next(tracks.Count)]);
+    }
+
+    internal const string NoMusicLibraryId = "none";
+
+    internal static bool IsNoMusic(NewsSettings settings)
+    {
+        var id = settings.MusicLibraryId?.Trim();
+        if (string.Equals(id, NoMusicLibraryId, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return string.Equals(settings.MusicLibraryName?.Trim(), "None", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(id);
     }
 
     private static string BuildScript(string header, IReadOnlyList<NewsArticle> articles, NewsSettings settings)

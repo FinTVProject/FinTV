@@ -72,7 +72,9 @@ public class DatabaseInitializer : IHostedService
             """ALTER TABLE "NewsSettings" ADD COLUMN IF NOT EXISTS "ReadHeadlinesOnly" boolean NOT NULL DEFAULT FALSE""",
             """ALTER TABLE "NewsSettings" ADD COLUMN IF NOT EXISTS "IntroText" text NULL""",
             """ALTER TABLE "NewsSettings" ADD COLUMN IF NOT EXISTS "OutroText" text NULL""",
-            """ALTER TABLE "NewsSettings" ADD COLUMN IF NOT EXISTS "RefreshMinutes" integer NOT NULL DEFAULT 10"""
+            """ALTER TABLE "NewsSettings" ADD COLUMN IF NOT EXISTS "RefreshMinutes" integer NOT NULL DEFAULT 10""",
+            """ALTER TABLE "NewsSettings" ADD COLUMN IF NOT EXISTS "MinNewStories" integer NOT NULL DEFAULT 1""",
+            """ALTER TABLE "NewsSettings" ADD COLUMN IF NOT EXISTS "BulletinVideosEnabled" boolean NOT NULL DEFAULT TRUE"""
         };
 
         foreach (var sql in statements)

@@ -29,6 +29,7 @@ public class GeneralController : ControllerBase
                 debugLogging = config.DebugLogging,
                 scheduleTimeZone,
                 playoutDaysToBuild = config.PlayoutDaysToBuild,
+                publicBaseUrl = config.PublicBaseUrl ?? string.Empty,
                 apiKey = PluginApiKey.Resolve() ?? string.Empty
             });
         }
@@ -102,6 +103,13 @@ public class GeneralController : ControllerBase
                 plugin.Configuration.PlayoutDaysToBuild = Math.Clamp(request.PlayoutDaysToBuild.Value, 1, 14);
             }
 
+            if (request.PublicBaseUrl is not null)
+            {
+                plugin.Configuration.PublicBaseUrl = string.IsNullOrWhiteSpace(request.PublicBaseUrl)
+                    ? null
+                    : request.PublicBaseUrl.Trim().TrimEnd('/');
+            }
+
             if (request.GenerateApiKey == true)
             {
                 plugin.Configuration.ApiKey = PluginApiKey.Generate();
@@ -127,6 +135,7 @@ public class GeneralController : ControllerBase
                 debugLogging = plugin.Configuration.DebugLogging,
                 scheduleTimeZone = plugin.Configuration.ScheduleTimeZone,
                 playoutDaysToBuild = plugin.Configuration.PlayoutDaysToBuild,
+                publicBaseUrl = plugin.Configuration.PublicBaseUrl ?? string.Empty,
                 apiKey = PluginApiKey.Resolve() ?? string.Empty
             });
         }
@@ -156,6 +165,11 @@ public class GeneralSettingsRequest
     /// Gets or sets how many days of playout to build (1-14).
     /// </summary>
     public int? PlayoutDaysToBuild { get; set; }
+
+    /// <summary>
+    /// Public origin for M3U/XMLTV when reverse-proxied (https://channelflow.example.com).
+    /// </summary>
+    public string? PublicBaseUrl { get; set; }
 
     /// <summary>
     /// Gets or sets the shared secret for the Jellyfin plugin and IPTV URLs.

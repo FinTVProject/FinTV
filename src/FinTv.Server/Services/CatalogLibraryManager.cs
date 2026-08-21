@@ -107,8 +107,14 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
             ? query.IncludeItemTypes.ToHashSet()
             : null;
         var items = QueryTyped(query, kinds);
-        var typedIds = items.Select(item => item.Id).ToHashSet();
-        items.AddRange(QueryMediaItems(query, kinds).Where(item => !typedIds.Contains(item.Id)));
+        var skipMediaFallback = kinds is { Count: 1 }
+            && kinds.Contains(BaseItemKind.Audio)
+            && items.Count > 0;
+        if (!skipMediaFallback)
+        {
+            var typedIds = items.Select(item => item.Id).ToHashSet();
+            items.AddRange(QueryMediaItems(query, kinds).Where(item => !typedIds.Contains(item.Id)));
+        }
 
         var librarySync = FinTvRuntime.Current?.Configuration.JellyfinLibraries;
         if (librarySync is not null)

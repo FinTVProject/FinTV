@@ -15,6 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("FinTV")
     ?? BuildPostgresConnectionString();
 
+builder.AddReverseProxySupport();
 builder.Services.AddDbContext<FinTvDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddControllers()
@@ -31,14 +32,26 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.Name = "fintv.auth";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.ExpireTimeSpan = TimeSpan.FromDays(30);
         options.SlidingExpiration = true;
         options.LoginPath = "/login";
         options.Events.OnRedirectToLogin = context =>
         {
-            if (context.Request.Path.StartsWithSegments("/api"))
+            if (IsApiOrStream(context.Request.Path))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            }
+
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            if (IsApiOrStream(context.Request.Path))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 return Task.CompletedTask;
             }
 
@@ -121,6 +134,8 @@ builder.Services.AddScoped<AiChannelAutoApplyService>();
 builder.Services.AddScoped<EbsService>();
 builder.Services.AddSingleton<NewsHeadlineService>();
 builder.Services.AddSingleton<NewsTtsService>();
+builder.Services.AddSingleton<NewsBulletinService>();
+builder.Services.AddSingleton<NewsBulletinTask>();
 builder.Services.AddScoped<WeatherStarChannelService>();
 builder.Services.AddScoped<NewsChannelService>();
 
@@ -128,16 +143,17 @@ builder.Services.AddHostedService<DatabaseInitializer>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PlayoutBuilderService>());
 builder.Services.AddHostedService<ScheduledTaskHost>();
 builder.Services.AddHostedService<NewsRefreshHostedService>();
+builder.Services.AddHostedService<NewsBulletinHostedService>();
 
 var app = builder.Build();
 
+app.UseReverseProxy();
 app.UseMiddleware<ApiKeyMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapControllers();
-app.MapFallbackToFile("index.html");
+app.MapSpaFallback();
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8097";
 app.Urls.Add($"http://0.0.0.0:{port}");
@@ -153,3 +169,6 @@ static string BuildPostgresConnectionString()
     var password = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? "fintv";
     return $"Host={host};Port={port};Database={db};Username={user};Password={password}";
 }
+
+static bool IsApiOrStream(PathString path)
+    => path.StartsWithSegments("/api") || path.StartsWithSegments("/iptv");

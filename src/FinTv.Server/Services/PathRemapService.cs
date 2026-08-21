@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using FinTv;
 using FinTv.Data;
 using FinTv.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -221,7 +222,13 @@ public sealed class PublicBaseUrl : IPublicBaseUrl
             return configured.TrimEnd('/');
         }
 
-        return $"{request.Scheme}://{request.Host}";
+        var fromEnv = Environment.GetEnvironmentVariable("FINTV_PUBLIC_URL");
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+        {
+            return fromEnv.Trim().TrimEnd('/');
+        }
+
+        return ReverseProxyHosting.PublicOrigin(request);
     }
 }
 

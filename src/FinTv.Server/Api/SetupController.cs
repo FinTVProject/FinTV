@@ -2,6 +2,7 @@ using FinTv;
 using FinTv.Auth;
 using FinTv.Configuration;
 using FinTv.Domain;
+using FinTv.News;
 using FinTv.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -242,6 +243,7 @@ public class TasksController : ControllerBase
     private readonly PlayoutBuilderService _playoutBuilder;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly CatalogCleanupService _catalogCleanup;
+    private readonly NewsBulletinService _newsBulletins;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TasksController"/> class.
@@ -249,11 +251,13 @@ public class TasksController : ControllerBase
     public TasksController(
         PlayoutBuilderService playoutBuilder,
         IServiceScopeFactory scopeFactory,
-        CatalogCleanupService catalogCleanup)
+        CatalogCleanupService catalogCleanup,
+        NewsBulletinService newsBulletins)
     {
         _playoutBuilder = playoutBuilder;
         _scopeFactory = scopeFactory;
         _catalogCleanup = catalogCleanup;
+        _newsBulletins = newsBulletins;
     }
 
     /// <summary>
@@ -265,6 +269,13 @@ public class TasksController : ControllerBase
     {
         _playoutBuilder.QueueForceRebuildAllChannels();
         return Accepted(new { queued = true });
+    }
+
+    [HttpPost("news-bulletin")]
+    public async Task<ActionResult<object>> RunNewsBulletin(CancellationToken cancellationToken)
+    {
+        var result = await _newsBulletins.RunAsync(scheduled: false, cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet("catalog-cleanup")]

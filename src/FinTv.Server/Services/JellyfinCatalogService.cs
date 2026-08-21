@@ -1,11 +1,15 @@
+using System.Collections.Concurrent;
+using System.Text.Json;
 using FinTv.Configuration;
 using FinTv.Domain;
-using System.Text.Json;
 
 namespace FinTv.Services;
 
 public class JellyfinCatalogService
 {
+    private static readonly TimeSpan MusicAudioCacheTtl = TimeSpan.FromMinutes(2);
+    private static readonly ConcurrentDictionary<string, (DateTime Utc, IReadOnlyList<BaseItem> Tracks)> MusicAudioCache = new(StringComparer.Ordinal);
+
     private readonly ILibraryManager _libraryManager;
     private readonly HolidayChannelService _holidays;
     private readonly FinTvListService _lists;
@@ -379,15 +383,18 @@ public class JellyfinCatalogService
 
     public IReadOnlyList<BaseItem> QueryAllMusicAudio()
     {
-        var query = new InternalItemsQuery
+        return GetCachedMusicAudio("all", () =>
         {
-            Recursive = true,
-            IsVirtualItem = false,
-            IncludeItemTypes = new[] { BaseItemKind.Audio },
-            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
-        };
+            var query = new InternalItemsQuery
+            {
+                Recursive = true,
+                IsVirtualItem = false,
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
+            };
 
-        return _libraryManager.GetItemsResult(query).Items.ToList();
+            return _libraryManager.GetItemsResult(query).Items.ToList();
+        });
     }
 
     public IReadOnlyList<BaseItem> QueryMusicAudioFromLibrary(string? libraryId, string? libraryName)
@@ -398,16 +405,32 @@ public class JellyfinCatalogService
             return Array.Empty<BaseItem>();
         }
 
-        var query = new InternalItemsQuery
+        return GetCachedMusicAudio(library.Id.ToString("N"), () =>
         {
-            ParentId = library.Id,
-            Recursive = true,
-            IsVirtualItem = false,
-            IncludeItemTypes = new[] { BaseItemKind.Audio },
-            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
-        };
+            var query = new InternalItemsQuery
+            {
+                ParentId = library.Id,
+                Recursive = true,
+                IsVirtualItem = false,
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
+            };
 
-        return _libraryManager.GetItemsResult(query).Items.ToList();
+            return _libraryManager.GetItemsResult(query).Items.ToList();
+        });
+    }
+
+    private static IReadOnlyList<BaseItem> GetCachedMusicAudio(string key, Func<IReadOnlyList<BaseItem>> load)
+    {
+        if (MusicAudioCache.TryGetValue(key, out var cached)
+            && DateTime.UtcNow - cached.Utc < MusicAudioCacheTtl)
+        {
+            return cached.Tracks;
+        }
+
+        var tracks = load();
+        MusicAudioCache[key] = (DateTime.UtcNow, tracks);
+        return tracks;
     }
 
     public IReadOnlyList<MusicLibraryInfo> GetMusicLibraries()

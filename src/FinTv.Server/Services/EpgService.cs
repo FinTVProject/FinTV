@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using FinTv;
 using FinTv.Auth;
 using FinTv.Data;
 using FinTv.Domain;
@@ -323,6 +324,11 @@ public class EpgService
     public static string GetPublicBaseUrl(HttpRequest? request, IPublicBaseUrl? appHost = null)
     {
         var configured = FinTvRuntime.Current?.Configuration.PublicBaseUrl;
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            configured = Environment.GetEnvironmentVariable("FINTV_PUBLIC_URL");
+        }
+
         if (!string.IsNullOrWhiteSpace(configured))
         {
             return configured.TrimEnd('/');
@@ -336,24 +342,16 @@ public class EpgService
             }
             catch
             {
-                // Fall back to forwarded headers or request host when Jellyfin cannot resolve a smart API URL.
+                // Fall back to the incoming request (including reverse-proxy headers).
             }
         }
 
         if (request is not null)
         {
-            var forwardedProto = request.Headers["X-Forwarded-Proto"].FirstOrDefault();
-            var forwardedHost = request.Headers["X-Forwarded-Host"].FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(forwardedHost))
-            {
-                var scheme = !string.IsNullOrWhiteSpace(forwardedProto) ? forwardedProto : request.Scheme;
-                return $"{scheme}://{forwardedHost}".TrimEnd('/');
-            }
-
-            return $"{request.Scheme}://{request.Host}".TrimEnd('/');
+            return ReverseProxyHosting.PublicOrigin(request);
         }
 
-        return "http://localhost:8096";
+        return "http://127.0.0.1:8097";
     }
 
     private string GetLogoUrl(Channel channel, string? baseUrl = null)

@@ -190,7 +190,7 @@ public class PluginBridgeController : ControllerBase
     [HttpGet("live-tv-urls")]
     public ActionResult<object> LiveTvUrls()
     {
-        var baseUrl = FinTvRuntime.Current?.Configuration.PublicBaseUrl?.TrimEnd('/') ?? "http://ChannelFlow-Server:8097";
+        var baseUrl = EpgService.GetPublicBaseUrl(Request);
         return Ok(new
         {
             m3u = PluginApiKey.AppendQuery($"{baseUrl}/iptv/channels.m3u"),
@@ -284,12 +284,18 @@ public class NewsController : ControllerBase
     private readonly FinTvDbContext _db;
     private readonly JellyfinCatalogService _catalog;
     private readonly NewsHeadlineService _headlines;
+    private readonly NewsBulletinService _bulletins;
 
-    public NewsController(FinTvDbContext db, JellyfinCatalogService catalog, NewsHeadlineService headlines)
+    public NewsController(
+        FinTvDbContext db,
+        JellyfinCatalogService catalog,
+        NewsHeadlineService headlines,
+        NewsBulletinService bulletins)
     {
         _db = db;
         _catalog = catalog;
         _headlines = headlines;
+        _bulletins = bulletins;
     }
 
     [HttpGet("feeds")]
@@ -340,6 +346,9 @@ public class NewsController : ControllerBase
             settings.IntroText,
             settings.OutroText,
             settings.RefreshMinutes,
+            minNewStories = NewsBulletinService.ClampMin(settings.MinNewStories),
+            bulletinVideosEnabled = settings.BulletinVideosEnabled,
+            bulletin = _bulletins.DescribeStatus(settings),
             musicLibraries = _catalog.GetMusicLibraries().Select(l => new { id = l.Id, name = l.Name })
         });
     }
@@ -358,15 +367,33 @@ public class NewsController : ControllerBase
         row.ArticleCount = Math.Clamp(settings.ArticleCount, 1, 30);
         row.TtsEnabled = settings.TtsEnabled;
         row.Voice = string.IsNullOrWhiteSpace(settings.Voice) ? "en-US" : settings.Voice.Trim();
-        row.MusicLibraryId = settings.MusicLibraryId;
-        row.MusicLibraryName = settings.MusicLibraryName;
+        if (NewsChannelService.IsNoMusic(settings)
+            || string.Equals(settings.MusicLibraryId?.Trim(), NewsChannelService.NoMusicLibraryId, StringComparison.OrdinalIgnoreCase))
+        {
+            row.MusicLibraryId = NewsChannelService.NoMusicLibraryId;
+            row.MusicLibraryName = "None";
+        }
+        else
+        {
+            row.MusicLibraryId = string.IsNullOrWhiteSpace(settings.MusicLibraryId) ? null : settings.MusicLibraryId.Trim();
+            row.MusicLibraryName = string.IsNullOrWhiteSpace(settings.MusicLibraryName) ? null : settings.MusicLibraryName.Trim();
+        }
         row.ShowHeader = settings.ShowHeader;
         row.ReadHeadlinesOnly = settings.ReadHeadlinesOnly;
         row.IntroText = settings.IntroText;
         row.OutroText = settings.OutroText;
         row.RefreshMinutes = Math.Clamp(settings.RefreshMinutes <= 0 ? 10 : settings.RefreshMinutes, 2, 120);
+        row.MinNewStories = NewsBulletinService.ClampMin(settings.MinNewStories);
+        row.BulletinVideosEnabled = settings.BulletinVideosEnabled;
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(row);
+    }
+
+    [HttpPost("bulletins/run")]
+    public async Task<ActionResult<object>> RunBulletin(CancellationToken cancellationToken)
+    {
+        var result = await _bulletins.RunAsync(scheduled: false, cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet("preview")]

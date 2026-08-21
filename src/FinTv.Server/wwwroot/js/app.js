@@ -1,6 +1,19 @@
 (function () {
     'use strict';
 
+    function appPathBase() {
+        const value = typeof window.__CF_BASE__ === 'string' ? window.__CF_BASE__ : '';
+        if (!value || value === '/') {
+            return '';
+        }
+        return value.endsWith('/') ? value.slice(0, -1) : value;
+    }
+
+    function withAppBase(path) {
+        const normalized = path.startsWith('/') ? path : '/' + path;
+        return appPathBase() + normalized;
+    }
+
     const CONTENT_TYPES = ['TV Show', 'Movie', 'Music Video', 'Music', 'Weather', 'News'];
     const CANDIDATE_KINDS = ['Jellyfin Item', 'Collection', 'Filter Query', 'Playlist / List'];
     const SLOT_CANDIDATE_KIND_VALUES = {
@@ -83,7 +96,7 @@
         if (false) {
             return ApiClient.getUrl(normalized);
         }
-        return '/' + normalized.replace(/^FinTV\/api/, 'api');
+        return withAppBase('/' + normalized.replace(/^FinTV\/api/, 'api'));
     }
 
     function parseErrorMessage(message) {
@@ -806,7 +819,8 @@
             channelOnAir = next;
         } catch (err) {
             channelOnAir = {};
-            if (isNetworkError(err)) {
+            const message = String((err && err.message) || '');
+            if (isNetworkError(err) || message === 'Sign in required') {
                 stopOnAirPolling();
             }
         }
@@ -1287,7 +1301,7 @@
 
         const path = channelEditorPath(channel.id);
         if (!options.fromRoute && normalizePathname(location.pathname) !== path) {
-            history.pushState({ tab: 'channel-editor', id: channel.id }, '', path);
+            history.pushState({ tab: 'channel-editor', id: channel.id }, '', withAppBase(path));
         }
     }
 
@@ -1305,12 +1319,12 @@
         }
 
         if (!options.skipHistory && channelEditorIdFromPath(location.pathname)) {
-            history.pushState({ tab: 'channels' }, '', '/channels');
+            history.pushState({ tab: 'channels' }, '', withAppBase('/channels'));
         }
     }
 
     function openChannelEditorWindow(id) {
-        const url = channelEditorPath(id);
+        const url = withAppBase(channelEditorPath(id));
         const win = window.open(url, 'fintv-edit-' + id, 'width=1120,height=900');
         if (!win) {
             history.pushState({ tab: 'channel-editor', id }, '', url);
@@ -3750,6 +3764,9 @@
             if ($('news-tts')) $('news-tts').checked = settings.ttsEnabled !== false;
             if ($('news-show-header')) $('news-show-header').checked = settings.showHeader !== false;
             if ($('news-headlines-only')) $('news-headlines-only').checked = !!settings.readHeadlinesOnly;
+            if ($('news-bulletin-enabled')) $('news-bulletin-enabled').checked = settings.bulletinVideosEnabled !== false;
+            if ($('news-min-new')) $('news-min-new').value = settings.minNewStories || 1;
+            renderNewsBulletinStatus(settings.bulletin);
             const voice = $('news-voice');
             if (voice) {
                 const value = settings.voice || 'en-US';
@@ -3764,9 +3781,13 @@
             const music = $('news-music-library');
             if (music && Array.isArray(settings.musicLibraries)) {
                 const current = settings.musicLibraryId || '';
-                music.innerHTML = '<option value="">Use EBS / all music</option>' +
+                music.innerHTML = '<option value="none">None (no music)</option>' +
+                    '<option value="">Use EBS background music</option>' +
                     settings.musicLibraries.map((lib) => `<option value="${escapeHtml(lib.id)}">${escapeHtml(lib.name)}</option>`).join('');
-                if (current) music.value = current;
+                music.value = current;
+                if (music.value !== current) {
+                    music.value = current.toLowerCase() === 'none' ? 'none' : '';
+                }
             }
             newsFeeds = Array.isArray(feeds) ? feeds : [];
             if (newsFeeds.length === 0) {
@@ -3833,10 +3854,15 @@
                 introText: $('news-intro')?.value || '',
                 outroText: $('news-outro')?.value || '',
                 musicLibraryId: music?.value || '',
-                musicLibraryName: music?.selectedOptions?.[0]?.textContent || ''
+                musicLibraryName: music?.value === 'none'
+                    ? 'None'
+                    : (music?.value ? (music.selectedOptions?.[0]?.textContent || '').trim() : ''),
+                minNewStories: Number($('news-min-new')?.value || 1),
+                bulletinVideosEnabled: !!$('news-bulletin-enabled')?.checked
             })
         });
         toast('News settings saved.', 'success');
+        await loadNews();
     }
 
     async function saveNewsFeeds() {
@@ -3865,6 +3891,46 @@
             box.innerHTML = articles.length
                 ? articles.map((a) => `<article class="news-preview-item"><h4>${escapeHtml(a.title)}</h4><p>${escapeHtml(a.summary || '')}</p></article>`).join('')
                 : '<p class="hint">No headlines. Add an enabled RSS URL and refresh.</p>';
+        }
+    }
+
+    function formatNewsBulletinStatus(bulletin) {
+        if (!bulletin) {
+            return 'No bulletin has run yet.';
+        }
+        const next = bulletin.nextRunAt ? `Next run ${new Date(bulletin.nextRunAt).toLocaleString()}.` : '';
+        if (!bulletin.lastRunAt) {
+            return next || 'No bulletin has run yet.';
+        }
+        const when = new Date(bulletin.lastRunAt).toLocaleString();
+        if (bulletin.lastCreated) {
+            const path = bulletin.lastVideoPath ? ` Saved ${bulletin.lastVideoPath}.` : '';
+            return `Last video ${when} · ${bulletin.lastEncodedStoryCount || 0} stories.${path} ${next}`.trim();
+        }
+        const reason = bulletin.lastSkipReason || 'skipped';
+        return `Last run ${when}: ${reason} ${next}`.trim();
+    }
+
+    function renderNewsBulletinStatus(bulletin) {
+        const text = formatNewsBulletinStatus(bulletin);
+        const newsEl = $('news-bulletin-status');
+        const taskEl = $('task-news-bulletin-status');
+        if (newsEl) newsEl.textContent = text;
+        if (taskEl) taskEl.textContent = text;
+    }
+
+    async function runNewsBulletin() {
+        const result = await api('/news/bulletins/run', { method: 'POST' });
+        if (result?.created) {
+            toast('News video created.', 'success');
+        } else {
+            toast(result?.skipReason || 'News video skipped.', 'success');
+        }
+        try {
+            const settings = await api('/news/settings');
+            renderNewsBulletinStatus(settings.bulletin);
+        } catch (err) {
+            renderNewsBulletinStatus(result);
         }
     }
 
@@ -4071,6 +4137,9 @@
             if ($('general-playout-days')) {
                 $('general-playout-days').value = String(settings.playoutDaysToBuild ?? 14);
             }
+            if ($('general-public-url')) {
+                $('general-public-url').value = settings.publicBaseUrl || '';
+            }
             if ($('general-api-key')) {
                 $('general-api-key').value = settings.apiKey || '';
             }
@@ -4092,6 +4161,7 @@
                     debugLogging: !!$('general-debug-logging')?.checked,
                     scheduleTimeZone: $('general-schedule-tz')?.value || 'America/New_York',
                     playoutDaysToBuild: Number($('general-playout-days')?.value || '14'),
+                    publicBaseUrl: ($('general-public-url')?.value || '').trim(),
                     apiKey: ($('general-api-key')?.value || '').trim() || null
                 })
             });
@@ -4981,6 +5051,10 @@
 
     function normalizePathname(pathname) {
         let path = String(pathname || '/').split('?')[0];
+        const prefix = appPathBase();
+        if (prefix && (path === prefix || path.startsWith(prefix + '/'))) {
+            path = path.slice(prefix.length) || '/';
+        }
         if (path.length > 1) {
             path = path.replace(/\/+$/, '');
         }
@@ -5059,7 +5133,7 @@
         switchTab(tab, { skipHistory: true });
         const app = document.getElementById('app-shell');
         if (app && !app.classList.contains('hidden') && (path === '/' || path === '/index.html' || path === '/setup')) {
-            history.replaceState({ tab }, '', TAB_PATHS[tab]);
+            history.replaceState({ tab }, '', withAppBase(TAB_PATHS[tab]));
         }
     }
 
@@ -5097,7 +5171,10 @@
         if (name === 'lineups') loadLineups();
         if (name === 'list') loadLists();
         if (name === 'jellyfin') loadJellyfinLibraries();
-        if (name === 'tasks') loadCatalogCleanup();
+        if (name === 'tasks') {
+            loadCatalogCleanup();
+            api('/news/settings').then((settings) => renderNewsBulletinStatus(settings.bulletin)).catch(() => {});
+        }
         if (name === 'special') loadSpecialPresentations();
         if (name === 'commercials') loadCommercials();
         if (name === 'commercialbrainz') loadCommercialBrainz();
@@ -5105,7 +5182,7 @@
 
         const path = TAB_PATHS[name];
         if (!options.skipHistory && normalizePathname(location.pathname) !== path) {
-            history.pushState({ tab: name }, '', path);
+            history.pushState({ tab: name }, '', withAppBase(path));
         }
 
         document.title = (TAB_TITLES[name] || name) + ' · ChannelFlow-Server';
@@ -5270,6 +5347,8 @@
         click('btn-save-news-feeds', () => saveNewsFeeds().catch((e) => toast(e.message, 'error')));
         click('btn-add-news-feed', addNewsFeedRow);
         click('btn-preview-news', () => loadNewsPreview(true).catch((e) => toast(e.message, 'error')));
+        click('btn-run-news-bulletin', () => runNewsBulletin().catch((e) => toast(e.message, 'error')));
+        click('btn-run-news-bulletin-task', () => runNewsBulletin().catch((e) => toast(e.message, 'error')));
         change('ebs-display-mode', updateEbsFieldVisibility);
         change('ebs-audio-mode', updateEbsFieldVisibility);
         change('ebs-music-source', updateEbsFieldVisibility);
@@ -5292,6 +5371,11 @@
     }
 
     function init(page) {
+        const app = document.getElementById('app-shell');
+        if (app && app.classList.contains('hidden')) {
+            return Promise.resolve();
+        }
+
         if (!syncConfigPage(page)) {
             return Promise.resolve();
         }
@@ -5340,6 +5424,11 @@
     window.FinTV = { init, refresh, loadChannels, bootFinTvAdmin, switchTab, tabFromPath };
 
     document.addEventListener('DOMContentLoaded', function () {
+        const app = document.getElementById('app-shell');
+        if (app && app.classList.contains('hidden')) {
+            return;
+        }
+
         const page = document.getElementById('FinTVConfigPage');
         if (page && window.FinTV) {
             window.FinTV.init(page);

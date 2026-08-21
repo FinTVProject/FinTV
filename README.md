@@ -54,6 +54,44 @@ Unraid: point `POSTGRES_HOST` at your existing Postgres container on a custom ne
 
 The plugin registers the Live TV tuner and XMLTV guide automatically when you set the ChannelFlow-Server URL and API key.
 
+## Reverse proxy
+
+ChannelFlow expects to sit behind Nginx Proxy Manager, SWAG, Caddy, or Traefik on a hostname such as `https://channelflow.example.duckdns.org`. Forward `X-Forwarded-Proto`, `X-Forwarded-Host`, and `X-Forwarded-For`. Leave live MPEG-TS unbuffered (`proxy_buffering off` / Caddy `flush_interval -1`) and raise the read timeout (an hour is enough).
+
+Optional env vars:
+
+- `FINTV_PUBLIC_URL` — public origin used in M3U/XMLTV when Jellyfin fetches them from the Docker network (example: `https://channelflow.example.duckdns.org`)
+- `FINTV_PATH_BASE` — only if the UI is served under a subpath such as `/channelflow`
+
+You can also set **Public base URL** on the General tab. Login cookies stay valid across container rebuilds (keys live in `/config/dataprotection`).
+
+Nginx:
+
+```nginx
+location / {
+    proxy_pass http://channelflow:8097;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+}
+```
+
+Caddy:
+
+```caddy
+channelflow.example.duckdns.org {
+    reverse_proxy channelflow:8097 {
+        flush_interval -1
+    }
+}
+```
+
 ## Weather and news
 
 WeatherStar graphics are vendored from [ws4kp](https://github.com/netbymatt/ws4kp) and [ws3kp](https://github.com/netbymatt/ws3kp) (MIT) and served on loopback inside the container, then encoded to MPEG-TS with optional Jellyfin music as a bed.

@@ -167,4 +167,11 @@ public class NewsSettings
     public string? OutroText { get; set; }
 
     public int RefreshMinutes { get; set; } = 10;
+
+    /// <summary>
+    /// Minimum unused RSS headlines required before a 6-hour bulletin video is encoded. Always skips when there are none.
+    /// </summary>
+    public int MinNewStories { get; set; } = 1;
+
+    public bool BulletinVideosEnabled { get; set; } = true;
 }

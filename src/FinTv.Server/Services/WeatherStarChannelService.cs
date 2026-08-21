@@ -102,10 +102,12 @@ public class WeatherStarChannelService
             using var frameStream = new ScreenshotFrameStream();
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var started = DateTime.UtcNow;
+            var ffmpegError = new System.Text.StringBuilder();
             var ffmpegTask = CliWrap.Cli.Wrap(ffmpegPath)
                 .WithArguments(_ffmpegBuilder.BuildWeatherCommand(width, height, CaptureFps, backgroundMusicPath))
                 .WithStandardInputPipe(CliWrap.PipeSource.FromStream(frameStream))
                 .WithStandardOutputPipe(CliWrap.PipeTarget.ToStream(output, autoFlush: true))
+                .WithStandardErrorPipe(CliWrap.PipeTarget.ToStringBuilder(ffmpegError))
                 .WithValidation(CliWrap.CommandResultValidation.None)
                 .ExecuteAsync(linkedCts.Token);
 
@@ -130,7 +132,15 @@ public class WeatherStarChannelService
             frameStream.Complete();
             try
             {
-                await ffmpegTask;
+                var result = await ffmpegTask;
+                if (!cancellationToken.IsCancellationRequested && ffmpegError.Length > 0)
+                {
+                    _logger.LogWarning(
+                        "Weather ffmpeg ended with exit {Exit} for {Channel}: {Error}",
+                        result.ExitCode,
+                        channel.Name,
+                        ffmpegError.ToString().Trim());
+                }
             }
             catch (OperationCanceledException)
             {
