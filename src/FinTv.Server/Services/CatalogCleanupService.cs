@@ -83,6 +83,7 @@ public sealed class CatalogCleanupService
 
     public async Task<int> MarkMissingExceptAsync(IReadOnlySet<Guid> presentIds, CancellationToken cancellationToken)
     {
+        await CatalogSchema.EnsureEpisodesTableAsync(_db, cancellationToken);
         var now = DateTime.UtcNow;
         var marked = await _db.MediaItems
             .Where(row => !row.IsMissing && !presentIds.Contains(row.Id))
