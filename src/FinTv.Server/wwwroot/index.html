@@ -709,6 +709,10 @@
                             <option value="world">World (Open-Meteo)</option>
                         </select>
                     </label>
+                    <p class="hint">Auto uses NOAA for US locations and Open-Meteo everywhere else. Save here so live weather channels pick it up on the next refresh.</p>
+                    <div class="actions">
+                        <button type="button" id="btn-save-weather-source" class="raised button-submit emby-button">Save Weather Source</button>
+                    </div>
                     <p class="hint">Apply a weather preset, then set each channel&apos;s location below. Background music comes from a Jellyfin music library (falls back to EBS music).</p>
                 </div>
                 <div class="card section-card">
@@ -874,7 +878,7 @@
                     </label>
                     <label class="field">
                         <span>Public base URL</span>
-                        <input id="general-public-url" type="url" class="emby-input" placeholder="https://channelflow.example.duckdns.org" autocomplete="off" spellcheck="false">
+                        <input id="general-public-url" type="text" class="emby-input" placeholder="https://channelflow.example.duckdns.org" autocomplete="off" spellcheck="false" inputmode="url">
                     </label>
                     <p class="hint">Used in M3U and XMLTV links when Jellyfin talks to ChannelFlow on the Docker network. Leave blank to use the request host, including HTTPS from your reverse proxy. Also settable as <code>CHANNELFLOW_PUBLIC_URL</code>.</p>
                     <div class="actions">

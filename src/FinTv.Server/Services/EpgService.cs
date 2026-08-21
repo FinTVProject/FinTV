@@ -323,10 +323,10 @@ public class EpgService
 
     public static string GetPublicBaseUrl(HttpRequest? request, IPublicBaseUrl? appHost = null)
     {
-        var configured = FinTvRuntime.Current?.Configuration.PublicBaseUrl;
+        var configured = ReverseProxyHosting.NormalizePublicBaseUrl(FinTvRuntime.Current?.Configuration.PublicBaseUrl);
         if (string.IsNullOrWhiteSpace(configured))
         {
-            configured = Environment.GetEnvironmentVariable("CHANNELFLOW_PUBLIC_URL");
+            configured = ReverseProxyHosting.NormalizePublicBaseUrl(AppEnvironment.Get("PUBLIC_URL"));
         }
 
         if (!string.IsNullOrWhiteSpace(configured))

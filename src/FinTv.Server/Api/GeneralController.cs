@@ -29,7 +29,9 @@ public class GeneralController : ControllerBase
                 debugLogging = config.DebugLogging,
                 scheduleTimeZone,
                 playoutDaysToBuild = config.PlayoutDaysToBuild,
-                publicBaseUrl = config.PublicBaseUrl ?? string.Empty,
+                publicBaseUrl = config.PublicBaseUrl
+                    ?? ReverseProxyHosting.NormalizePublicBaseUrl(AppEnvironment.Get("PUBLIC_URL"))
+                    ?? string.Empty,
                 apiKey = PluginApiKey.Resolve() ?? string.Empty
             });
         }
@@ -105,9 +107,7 @@ public class GeneralController : ControllerBase
 
             if (request.PublicBaseUrl is not null)
             {
-                plugin.Configuration.PublicBaseUrl = string.IsNullOrWhiteSpace(request.PublicBaseUrl)
-                    ? null
-                    : request.PublicBaseUrl.Trim().TrimEnd('/');
+                plugin.Configuration.PublicBaseUrl = ReverseProxyHosting.NormalizePublicBaseUrl(request.PublicBaseUrl);
             }
 
             if (request.GenerateApiKey == true)

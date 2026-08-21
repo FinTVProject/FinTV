@@ -21,9 +21,9 @@ services:
     devices:
       - /dev/dri:/dev/dri
     volumes:
-      - fintv-config:/config
+      - channelflow-config:/config
       - ${CHANNELFLOW_MEDIA:-${FINTV_MEDIA:-./media}}:/media
     restart: unless-stopped
 
 volumes:
-  fintv-config:
+  channelflow-config:

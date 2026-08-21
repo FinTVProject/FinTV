@@ -81,4 +81,20 @@ internal static class ReverseProxyHosting
         var prefix = request.PathBase.HasValue ? request.PathBase.Value!.TrimEnd('/') : "";
         return $"{request.Scheme}://{request.Host}{prefix}";
     }
+
+    public static string? NormalizePublicBaseUrl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var url = value.Trim().TrimEnd('/');
+        if (!url.Contains("://", StringComparison.Ordinal))
+        {
+            url = "https://" + url;
+        }
+
+        return url;
+    }
 }

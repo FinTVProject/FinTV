@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using FinTv.Domain;
 
 namespace FinTv.Configuration;
@@ -16,6 +17,7 @@ public class PluginConfiguration
 
     public int HistoryDaysToConsider { get; set; } = 7;
 
+    [JsonPropertyName("publicBaseUrl")]
     public string? PublicBaseUrl { get; set; }
 
     /// <summary>

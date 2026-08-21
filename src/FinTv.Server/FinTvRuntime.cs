@@ -10,6 +10,7 @@ public sealed class FinTvRuntime
     public static FinTvRuntime Current { get; set; } = null!;
 
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly object _configGate = new();
     private PluginConfiguration _configuration = new();
 
     public FinTvRuntime(IServiceScopeFactory scopeFactory, IWebHostEnvironment env, IConfiguration config)
@@ -79,16 +80,20 @@ public sealed class FinTvRuntime
 
     public void SaveConfiguration()
     {
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<FinTvDbContext>();
-        var row = db.AppSettings.FirstOrDefault(r => r.Id == 1);
-        if (row is null)
+        lock (_configGate)
         {
-            row = new AppSettingsRow { Id = 1 };
-            db.AppSettings.Add(row);
-        }
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<FinTvDbContext>();
+            var row = db.AppSettings.FirstOrDefault(r => r.Id == 1);
+            if (row is null)
+            {
+                row = new AppSettingsRow { Id = 1 };
+                db.AppSettings.Add(row);
+            }
 
-        row.Json = FinTvJson.Serialize(_configuration);
-        db.SaveChanges();
+            row.Json = FinTvJson.Serialize(_configuration);
+            db.Entry(row).Property(e => e.Json).IsModified = true;
+            db.SaveChanges();
+        }
     }
 }

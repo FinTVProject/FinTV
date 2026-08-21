@@ -3227,6 +3227,12 @@
             if ($('general-playout-days')) {
                 $('general-playout-days').value = String(settings.playoutDaysToBuild ?? 14);
             }
+            if ($('general-public-url')) {
+                $('general-public-url').value = settings.publicBaseUrl || '';
+            }
+            if ($('general-api-key')) {
+                $('general-api-key').value = settings.apiKey || '';
+            }
         } catch (err) {
             reportApiError(err, 'Could not load general settings.');
         }

@@ -216,13 +216,13 @@ public sealed class PublicBaseUrl : IPublicBaseUrl
 
     public string GetSmartApiUrl(HttpRequest request)
     {
-        var configured = FinTvRuntime.Current?.Configuration.PublicBaseUrl;
+        var configured = ReverseProxyHosting.NormalizePublicBaseUrl(FinTvRuntime.Current?.Configuration.PublicBaseUrl);
         if (!string.IsNullOrWhiteSpace(configured))
         {
-            return configured.TrimEnd('/');
+            return configured;
         }
 
-        var fromEnv = AppEnvironment.Get("PUBLIC_URL");
+        var fromEnv = ReverseProxyHosting.NormalizePublicBaseUrl(AppEnvironment.Get("PUBLIC_URL"));
         if (!string.IsNullOrWhiteSpace(fromEnv))
         {
             return fromEnv.Trim().TrimEnd('/');

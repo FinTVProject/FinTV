@@ -92,9 +92,7 @@ public class SetupController : ControllerBase
             return NotFound();
         }
 
-        plugin.Configuration.PublicBaseUrl = string.IsNullOrWhiteSpace(request.PublicBaseUrl)
-            ? null
-            : request.PublicBaseUrl.Trim().TrimEnd('/');
+        plugin.Configuration.PublicBaseUrl = ReverseProxyHosting.NormalizePublicBaseUrl(request.PublicBaseUrl);
 
         if (request.EbsBackgroundMusicSource.HasValue)
         {

@@ -3723,10 +3723,12 @@
         try {
             const defaultRaw = $('weather-default-zip')?.value.trim();
             const defaultLocation = defaultRaw ? readWeatherLocation(defaultRaw, 'Default location') : null;
-            const channelZips = Array.from(qa('.weather-channel-zip')).map((input) => ({
-                id: input.dataset.channelId,
-                location: readWeatherLocation(input.value, 'Channel location')
-            }));
+            const channelZips = Array.from(qa('.weather-channel-zip'))
+                .filter((input) => (input.value || '').trim().length >= 2)
+                .map((input) => ({
+                    id: input.dataset.channelId,
+                    location: readWeatherLocation(input.value, 'Channel location')
+                }));
             const saved = await api('/weather/settings', {
                 method: 'PUT',
                 body: JSON.stringify({
@@ -4289,7 +4291,7 @@
         }
 
         try {
-            await api('/general/settings', {
+            const saved = await api('/general/settings', {
                 method: 'PUT',
                 body: JSON.stringify({
                     debugLogging: !!$('general-debug-logging')?.checked,
@@ -4299,6 +4301,9 @@
                     apiKey: ($('general-api-key')?.value || '').trim() || null
                 })
             });
+            if ($('general-public-url')) {
+                $('general-public-url').value = saved.publicBaseUrl || '';
+            }
             toast('General settings saved.', 'success');
             await loadGeneral();
         } catch (err) {
@@ -5481,6 +5486,7 @@
         click('btn-remove-ebs-usa', () => removeEbsSlate('usa'));
         click('btn-remove-ebs-international', () => removeEbsSlate('international'));
         click('btn-save-weather', saveWeatherSettings);
+        click('btn-save-weather-source', saveWeatherSettings);
         click('btn-save-news', () => saveNewsSettings().catch((e) => toast(e.message, 'error')));
         change('news-no-music', syncNewsMusicUi);
         click('btn-save-transcode', () => saveTranscodeSettings().catch((e) => toast(e.message, 'error')));
