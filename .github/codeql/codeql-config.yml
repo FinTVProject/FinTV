@@ -1,0 +1,12 @@
+name: "CodeQL"
+
+queries:
+  - uses: security-and-quality
+
+paths:
+  - src/FinTv.Server
+  - .github/workflows
+
+paths-ignore:
+  - vendor
+  - Jellyfin.Plugin.FinTV

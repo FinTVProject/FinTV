@@ -1,0 +1,148 @@
+name: Security
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: csharp
+            build-mode: manual
+          - language: actions
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        if: matrix.language == 'csharp'
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: .github/codeql/codeql-config.yml
+
+      - name: Build FinTV Server
+        if: matrix.language == 'csharp'
+        run: dotnet build src/FinTv.Server/FinTv.Server.csproj -c Release /p:SkipLogoFetch=true
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  nuget-vulnerabilities:
+    name: NuGet vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore src/FinTv.Server/FinTv.Server.csproj
+
+      - name: Check for vulnerable packages
+        run: |
+          set -euo pipefail
+          dotnet list src/FinTv.Server/FinTv.Server.csproj package --vulnerable --include-transitive --format json | tee vulnerable.json
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          data = json.loads(Path("vulnerable.json").read_text(encoding="utf-8"))
+          findings = []
+          for project in data.get("projects") or []:
+              path = project.get("path", "project")
+              for framework in project.get("frameworks") or []:
+                  for key in ("topLevelPackages", "transitivePackages"):
+                      for pkg in framework.get(key) or []:
+                          vulns = pkg.get("vulnerabilities") or []
+                          if not vulns:
+                              continue
+                          ids = ", ".join(
+                              str(v.get("advisoryurl") or v.get("severity") or v)
+                              for v in vulns
+                          )
+                          findings.append(
+                              f"{pkg.get('id')} {pkg.get('resolvedVersion')} [{key}] {ids} ({path})"
+                          )
+
+          lines = ["## NuGet vulnerabilities", ""]
+          if findings:
+              lines.append("Vulnerable packages:")
+              lines.extend(f"- {item}" for item in findings)
+          else:
+              lines.append("No known NuGet vulnerabilities in FinTV Server packages.")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+          if findings:
+              print("Vulnerable packages:")
+              print("\n".join(findings))
+              sys.exit(1)
+
+          print("No known NuGet vulnerabilities.")
+          PY
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          comment-summary-in-pr: on-failure
+          fail-on-severity: high
+
+  trivy:
+    name: Trivy filesystem
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aquasecurity/trivy-action@0.32.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          skip-dirs: vendor,Jellyfin.Plugin.FinTV
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: "1"
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
