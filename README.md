@@ -28,17 +28,22 @@ Playback reads **local files** from mounted library shares. Configure **path rem
 - Jellyfin 12 + the FinTV plugin
 - The same media shares mounted into Jellyfin and FinTV Server
 
-## Docker Compose
+## Docker
 
-```yaml
-# see docker-compose.yml
+Image: `ghcr.io/fintvproject/fintv-server:latest` (built from this repo). Unraid template: [`unraid/fintv-server.xml`](unraid/fintv-server.xml).
+
+```bash
+cp .env.example .env
+# set FINTV_API_KEY, FINTV_ADMIN_PASSWORD, and FINTV_MEDIA (host path to your libraries)
+docker compose up -d --build
 ```
 
-1. Start Postgres + `ghcr.io/binarygeek119/fintv-server:latest`
-2. Open `http://<host>:8097` and sign in (`FINTV_ADMIN_USER` / `FINTV_ADMIN_PASSWORD` on first run)
-3. Add path remaps under General
-4. Install the FinTV plugin, set Server URL + API key (`FINTV_API_KEY`), run **FinTV Catalog Sync**
-5. Join FinTV Server, Postgres, and Jellyfin to the **same Docker network**
+Then:
+
+1. Open `http://<host>:8097` and sign in (`FINTV_ADMIN_USER` / `FINTV_ADMIN_PASSWORD` on first run)
+2. Add path remaps under General (Jellyfin prefix → `/media` or your mount)
+3. Install the FinTV plugin, set Server URL + API key (`FINTV_API_KEY`), run **FinTV Catalog Sync**
+4. Join FinTV Server, Postgres, and Jellyfin to the **same Docker network**
 
 Unraid: install official PostgreSQL from CA, then FinTV-Server from the template. Put both on a custom network with Jellyfin.
 

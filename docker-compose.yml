@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: fintv
       POSTGRES_USER: fintv
-      POSTGRES_PASSWORD: fintv
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fintv}
     volumes:
       - fintv-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -12,31 +12,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   fintv-server:
-    image: ghcr.io/binarygeek119/fintv-server:latest
+    image: ghcr.io/fintvproject/fintv-server:latest
     build: .
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "8097:8097"
+      - "${FINTV_PORT:-8097}:8097"
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: fintv
       POSTGRES_USER: fintv
-      POSTGRES_PASSWORD: fintv
-      FINTV_API_KEY: change-me
-      FINTV_ADMIN_USER: admin
-      FINTV_ADMIN_PASSWORD: changeme
-      JELLYFIN_URL: http://jellyfin:8096
-      TZ: America/Chicago
-      PUID: "99"
-      PGID: "100"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fintv}
+      FINTV_API_KEY: ${FINTV_API_KEY:-change-me}
+      FINTV_ADMIN_USER: ${FINTV_ADMIN_USER:-admin}
+      FINTV_ADMIN_PASSWORD: ${FINTV_ADMIN_PASSWORD:-changeme}
+      FINTV_CONFIG: /config
+      JELLYFIN_URL: ${JELLYFIN_URL:-http://jellyfin:8096}
+      TZ: ${TZ:-America/Chicago}
     volumes:
-      - /mnt/user/appdata/fintv-server:/config
-      - /mnt/user/media:/media
+      - fintv-config:/config
+      - ${FINTV_MEDIA:-./media}:/media
+    restart: unless-stopped
 
 volumes:
   fintv-pgdata:
+  fintv-config:

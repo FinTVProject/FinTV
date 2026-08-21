@@ -58,3 +58,7 @@ vendor/**/node_modules/
 Jellyfin.Plugin.FinTV/Assets/tools/yt-dlp/
 release-artifact/
 artifacts/
+.env
+media/*
+!media/.gitkeep
+
