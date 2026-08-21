@@ -174,7 +174,8 @@ public class CatalogController : ControllerBase
             TvLibraryIds = JellyfinLibrarySettings.Normalize(request?.TvLibraryIds),
             MovieLibraryIds = JellyfinLibrarySettings.Normalize(request?.MovieLibraryIds),
             MusicLibraryIds = JellyfinLibrarySettings.Normalize(request?.MusicLibraryIds),
-            MusicVideoLibraryIds = JellyfinLibrarySettings.Normalize(request?.MusicVideoLibraryIds)
+            MusicVideoLibraryIds = JellyfinLibrarySettings.Normalize(request?.MusicVideoLibraryIds),
+            Libraries = plugin.Configuration.JellyfinLibraries.Libraries
         };
         plugin.SaveConfiguration();
         return Ok(plugin.Configuration.JellyfinLibraries);
@@ -182,6 +183,11 @@ public class CatalogController : ControllerBase
 
     private async Task<List<object>> ListSyncedLibrariesAsync(CancellationToken cancellationToken)
     {
+        var reported = FinTvRuntime.Current?.Configuration.JellyfinLibraries.Libraries;
+        if (reported is { Count: > 0 })
+        {
+            return await ListReportedLibrariesAsync(reported, cancellationToken);
+        }
         var rows = await _db.MediaItems.AsNoTracking()
             .Select(item => new LibraryScanRow(
                 item.Id,
@@ -256,6 +262,46 @@ public class CatalogController : ControllerBase
                 collectionType = row.library.CollectionType,
                 groups = row.groups,
                 itemCount = row.library.ItemCount
+            })
+            .ToList();
+    }
+
+    private async Task<List<object>> ListReportedLibrariesAsync(
+        IReadOnlyList<JellyfinLibraryInfo> reported,
+        CancellationToken cancellationToken)
+    {
+        var counts = await _db.MediaItems.AsNoTracking()
+            .Where(item => item.LibraryId != null
+                && item.Kind != BaseItemKind.Folder
+                && item.Kind != BaseItemKind.Playlist)
+            .GroupBy(item => item.LibraryId!.Value)
+            .Select(group => new { Id = group.Key, Count = group.Count() })
+            .ToListAsync(cancellationToken);
+        var countById = counts.ToDictionary(row => row.Id, row => row.Count);
+
+        return reported
+            .Where(library => library.Id != Guid.Empty && !IsPlaceholderName(library.Name))
+            .Select(library =>
+            {
+                var groups = LibraryGroupsFor(library.CollectionType, []);
+                countById.TryGetValue(library.Id, out var itemCount);
+                return new
+                {
+                    library,
+                    groups,
+                    itemCount
+                };
+            })
+            .Where(row => row.groups.Length > 0)
+            .OrderBy(row => row.library.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(row => (object)new
+            {
+                id = row.library.Id,
+                ids = new[] { row.library.Id },
+                name = row.library.Name,
+                collectionType = row.library.CollectionType,
+                groups = row.groups,
+                itemCount = row.itemCount
             })
             .ToList();
     }

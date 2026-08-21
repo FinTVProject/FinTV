@@ -87,7 +87,22 @@ public class PluginBridgeController : ControllerBase
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+        if (request.Libraries is { Count: > 0 })
+        {
+            SaveReportedLibraries(request.Libraries);
+        }
+
         return Ok(new { count = request.Items.Count });
+    }
+
+    /// <summary>
+    /// Replaces the Jellyfin library list used by the FinTV Library tab and catalog sync filters.
+    /// </summary>
+    [HttpPost("libraries")]
+    public IActionResult SyncLibraries([FromBody] JellyfinLibraryListRequest? request)
+    {
+        var libraries = SaveReportedLibraries(request?.Libraries);
+        return Ok(new { count = libraries.Count });
     }
 
     /// <summary>
@@ -103,7 +118,8 @@ public class PluginBridgeController : ControllerBase
             tvLibraryIds = settings.TvLibraryIds,
             movieLibraryIds = settings.MovieLibraryIds,
             musicLibraryIds = settings.MusicLibraryIds,
-            musicVideoLibraryIds = settings.MusicVideoLibraryIds
+            musicVideoLibraryIds = settings.MusicVideoLibraryIds,
+            libraries = settings.Libraries
         });
     }
 
@@ -144,6 +160,34 @@ public class PluginBridgeController : ControllerBase
             m3u = PluginApiKey.AppendQuery($"{baseUrl}/iptv/channels.m3u"),
             epg = PluginApiKey.AppendQuery($"{baseUrl}/iptv/epg.xml")
         });
+    }
+
+    internal static List<Configuration.JellyfinLibraryInfo> SaveReportedLibraries(
+        IEnumerable<JellyfinLibraryDto>? libraries)
+    {
+        var plugin = FinTvRuntime.Current;
+        if (plugin is null)
+        {
+            return [];
+        }
+
+        var normalized = (libraries ?? [])
+            .Where(library => library.Id != Guid.Empty && !string.IsNullOrWhiteSpace(library.Name))
+            .GroupBy(library => library.Id)
+            .Select(group => group.First())
+            .Select(library => new Configuration.JellyfinLibraryInfo
+            {
+                Id = library.Id,
+                Name = library.Name!.Trim(),
+                CollectionType = string.IsNullOrWhiteSpace(library.CollectionType)
+                    ? null
+                    : library.CollectionType.Trim()
+            })
+            .ToList();
+
+        plugin.Configuration.JellyfinLibraries.Libraries = normalized;
+        plugin.SaveConfiguration();
+        return normalized;
     }
 }
 
@@ -285,6 +329,22 @@ public class CatalogSyncRequest
     public bool ReplaceAll { get; set; }
 
     public List<CatalogItemDto> Items { get; set; } = [];
+
+    public List<JellyfinLibraryDto>? Libraries { get; set; }
+}
+
+public class JellyfinLibraryListRequest
+{
+    public List<JellyfinLibraryDto>? Libraries { get; set; }
+}
+
+public class JellyfinLibraryDto
+{
+    public Guid Id { get; set; }
+
+    public string? Name { get; set; }
+
+    public string? CollectionType { get; set; }
 }
 
 public class CatalogItemDto

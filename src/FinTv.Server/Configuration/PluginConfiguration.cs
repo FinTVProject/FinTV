@@ -215,6 +215,11 @@ public class JellyfinLibrarySettings
 
     public List<Guid> MusicVideoLibraryIds { get; set; } = new();
 
+    /// <summary>
+    /// Jellyfin libraries reported by the plugin (name, id, and type).
+    /// </summary>
+    public List<JellyfinLibraryInfo> Libraries { get; set; } = new();
+
     public bool Allows(BaseItemKind kind, Guid? libraryId)
     {
         if (kind is BaseItemKind.Folder or BaseItemKind.Playlist)
@@ -245,6 +250,18 @@ public class JellyfinLibrarySettings
             .Distinct()
             .ToList()
             ?? new List<Guid>();
+}
+
+/// <summary>
+/// A Jellyfin media library reported by the plugin.
+/// </summary>
+public class JellyfinLibraryInfo
+{
+    public Guid Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string? CollectionType { get; set; }
 }
 
 public class WeatherGuideSlotCache
