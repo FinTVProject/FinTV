@@ -22,6 +22,7 @@ public sealed class CatalogTypedStore
     public async Task UpsertAsync(IReadOnlyList<CatalogItemDto> items, bool replaceAll, CancellationToken cancellationToken)
     {
         _ = replaceAll;
+        await CatalogSchema.EnsureEpisodesTableAsync(_db, cancellationToken);
         var incomingIds = items.Select(item => item.Id).ToHashSet();
 
         var tv = await _db.TvShows.Where(row => incomingIds.Contains(row.Id)).ToDictionaryAsync(row => row.Id, cancellationToken);

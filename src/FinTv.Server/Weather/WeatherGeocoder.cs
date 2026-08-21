@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using FinTv.Services;
@@ -6,6 +7,8 @@ namespace FinTv.Weather;
 
 public sealed class WeatherGeocoder
 {
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(6);
+    private readonly ConcurrentDictionary<string, (GeoPlace Place, DateTimeOffset Expires)> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly IHttpClientFactory _http;
 
     public WeatherGeocoder(IHttpClientFactory http)
@@ -16,21 +19,32 @@ public sealed class WeatherGeocoder
     public async Task<GeoPlace> ResolveAsync(string query, CancellationToken cancellationToken)
     {
         var trimmed = WeatherLocationParser.NormalizeLocation(query);
+        if (_cache.TryGetValue(trimmed, out var hit) && hit.Expires > DateTimeOffset.UtcNow)
+        {
+            return hit.Place;
+        }
+
+        GeoPlace Remember(GeoPlace resolved)
+        {
+            _cache[trimmed] = (resolved, DateTimeOffset.UtcNow.Add(CacheTtl));
+            return resolved;
+        }
+
         if (WeatherLocationParser.TryParseLatLon(trimmed, out var lat, out var lon))
         {
             var reverse = await SearchAsync($"{lat.ToString("F4", CultureInfo.InvariantCulture)},{lon.ToString("F4", CultureInfo.InvariantCulture)}", cancellationToken);
             if (reverse is not null)
             {
-                return reverse with { Query = trimmed, Latitude = lat, Longitude = lon };
+                return Remember(reverse with { Query = trimmed, Latitude = lat, Longitude = lon });
             }
 
-            return new GeoPlace
+            return Remember(new GeoPlace
             {
                 Query = trimmed,
                 DisplayName = WeatherLocationParser.GetDisplayName(trimmed),
                 Latitude = lat,
                 Longitude = lon
-            };
+            });
         }
 
         var zip = WeatherLocationParser.ExtractZip(trimmed);
@@ -39,14 +53,14 @@ public sealed class WeatherGeocoder
             var fromZip = await SearchAsync(zip, cancellationToken, country: "US");
             if (fromZip is not null)
             {
-                return fromZip with { Query = trimmed };
+                return Remember(fromZip with { Query = trimmed });
             }
         }
 
         var found = await SearchAsync(trimmed, cancellationToken);
         if (found is not null)
         {
-            return found with { Query = trimmed };
+            return Remember(found with { Query = trimmed });
         }
 
         throw new InvalidOperationException("Could not geocode weather location: " + trimmed);

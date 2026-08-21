@@ -1,4 +1,3 @@
-using System.Data;
 using FinTv.Data;
 using FinTv.Services;
 using Microsoft.EntityFrameworkCore;
@@ -24,7 +23,7 @@ public class DatabaseInitializer : IHostedService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FinTvDbContext>();
         await db.Database.EnsureCreatedAsync(cancellationToken);
-        await EnsureEpisodesTableAsync(db, cancellationToken);
+        await CatalogSchema.EnsureEpisodesTableAsync(db, cancellationToken);
         await EnsureNewsColumnsAsync(db, cancellationToken);
         await EnsureChannelColumnsAsync(db, cancellationToken);
         await EnsureMediaItemColumnsAsync(db, cancellationToken);
@@ -199,57 +198,13 @@ public class DatabaseInitializer : IHostedService
         {
             try
             {
-                await ExecuteSchemaAsync(db, sql, cancellationToken);
+                await CatalogSchema.ExecuteAsync(db, sql, cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Catalog table ensure failed for {Sql}", sql);
             }
         }
-    }
-
-    private async Task EnsureEpisodesTableAsync(FinTvDbContext db, CancellationToken cancellationToken)
-    {
-        // Clone TvShows so this works on existing databases. EnsureCreated never adds tables later,
-        // and CREATE TABLE ... DEFAULT '{}' cannot go through EF ExecuteSqlRaw.
-        await ExecuteSchemaAsync(
-            db,
-            """CREATE TABLE IF NOT EXISTS "Episodes" (LIKE "TvShows" INCLUDING DEFAULTS)""",
-            cancellationToken);
-
-        var statements = new[]
-        {
-            """ALTER TABLE "Episodes" ADD COLUMN IF NOT EXISTS "SeriesId" uuid NULL""",
-            """ALTER TABLE "Episodes" ADD COLUMN IF NOT EXISTS "SeriesName" text NULL""",
-            """ALTER TABLE "Episodes" ADD COLUMN IF NOT EXISTS "SeasonId" uuid NULL""",
-            """ALTER TABLE "Episodes" ADD COLUMN IF NOT EXISTS "SeasonName" text NULL""",
-            """ALTER TABLE "Episodes" ADD COLUMN IF NOT EXISTS "SeasonNumber" integer NULL""",
-            """ALTER TABLE "Episodes" ADD COLUMN IF NOT EXISTS "EpisodeNumber" integer NULL""",
-            """CREATE INDEX IF NOT EXISTS "IX_Episodes_Name" ON "Episodes" ("Name")""",
-            """CREATE INDEX IF NOT EXISTS "IX_Episodes_LibraryId" ON "Episodes" ("LibraryId")""",
-            """CREATE INDEX IF NOT EXISTS "IX_Episodes_JellyfinItemId" ON "Episodes" ("JellyfinItemId")""",
-            """CREATE INDEX IF NOT EXISTS "IX_Episodes_SeriesId" ON "Episodes" ("SeriesId")""",
-            """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PK_Episodes') THEN
-                    ALTER TABLE "Episodes" ADD CONSTRAINT "PK_Episodes" PRIMARY KEY ("Id");
-                END IF;
-            END $$;
-            """
-        };
-
-        foreach (var sql in statements)
-        {
-            await ExecuteSchemaAsync(db, sql, cancellationToken);
-        }
-
-        if (!await TableExistsAsync(db, "Episodes", cancellationToken))
-        {
-            throw new InvalidOperationException("Catalog upgrade failed: relation \"Episodes\" was not created.");
-        }
-
-        _logger.LogInformation("Episodes catalog table is ready");
     }
 
     private async Task EnsureCatalogMissingColumnsAsync(FinTvDbContext db, CancellationToken cancellationToken)
@@ -268,7 +223,7 @@ public class DatabaseInitializer : IHostedService
             {
                 try
                 {
-                    await ExecuteSchemaAsync(db, sql, cancellationToken);
+                    await CatalogSchema.ExecuteAsync(db, sql, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -322,72 +277,12 @@ public class DatabaseInitializer : IHostedService
 
         try
         {
-            await ExecuteSchemaAsync(db, sql, cancellationToken);
+            await CatalogSchema.ExecuteAsync(db, sql, cancellationToken);
             _logger.LogInformation("TV catalog upgrade checked: episodes live in Episodes; TvShows holds series only");
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "TV catalog episode table upgrade failed");
-        }
-    }
-
-    private static async Task ExecuteSchemaAsync(FinTvDbContext db, string sql, CancellationToken cancellationToken)
-    {
-        var connection = db.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose)
-        {
-            await db.Database.OpenConnectionAsync(cancellationToken);
-        }
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = sql;
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        }
-        finally
-        {
-            if (shouldClose)
-            {
-                await db.Database.CloseConnectionAsync();
-            }
-        }
-    }
-
-    private static async Task<bool> TableExistsAsync(FinTvDbContext db, string tableName, CancellationToken cancellationToken)
-    {
-        var connection = db.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose)
-        {
-            await db.Database.OpenConnectionAsync(cancellationToken);
-        }
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM information_schema.tables
-                    WHERE table_schema = current_schema()
-                      AND table_name = @tableName
-                )
-                """;
-            var parameter = command.CreateParameter();
-            parameter.ParameterName = "tableName";
-            parameter.Value = tableName;
-            command.Parameters.Add(parameter);
-            var result = await command.ExecuteScalarAsync(cancellationToken);
-            return result is true || result is bool flag && flag;
-        }
-        finally
-        {
-            if (shouldClose)
-            {
-                await db.Database.CloseConnectionAsync();
-            }
         }
     }
 }
