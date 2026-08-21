@@ -1,3 +1,4 @@
+using System.Data;
 using FinTv.Data;
 using FinTv.Services;
 using Microsoft.EntityFrameworkCore;
@@ -204,12 +205,17 @@ public class DatabaseInitializer : IHostedService
         {
             try
             {
-                await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+                await ExecuteSchemaAsync(db, sql, cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Catalog table ensure failed for {Sql}", sql);
             }
+        }
+
+        if (!await TableExistsAsync(db, "Episodes", cancellationToken))
+        {
+            throw new InvalidOperationException("Catalog upgrade failed: relation \"Episodes\" was not created.");
         }
     }
 
@@ -229,7 +235,7 @@ public class DatabaseInitializer : IHostedService
             {
                 try
                 {
-                    await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+                    await ExecuteSchemaAsync(db, sql, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -283,12 +289,72 @@ public class DatabaseInitializer : IHostedService
 
         try
         {
-            await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+            await ExecuteSchemaAsync(db, sql, cancellationToken);
             _logger.LogInformation("TV catalog upgrade checked: episodes live in Episodes; TvShows holds series only");
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "TV catalog episode table upgrade failed");
+        }
+    }
+
+    private static async Task ExecuteSchemaAsync(FinTvDbContext db, string sql, CancellationToken cancellationToken)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await db.Database.OpenConnectionAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await db.Database.CloseConnectionAsync();
+            }
+        }
+    }
+
+    private static async Task<bool> TableExistsAsync(FinTvDbContext db, string tableName, CancellationToken cancellationToken)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await db.Database.OpenConnectionAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = current_schema()
+                      AND table_name = @tableName
+                )
+                """;
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "tableName";
+            parameter.Value = tableName;
+            command.Parameters.Add(parameter);
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            return result is true || result is bool flag && flag;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await db.Database.CloseConnectionAsync();
+            }
         }
     }
 }
