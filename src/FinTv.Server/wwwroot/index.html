@@ -860,6 +860,24 @@
                     <button id="btn-rebuild-all" class="raised button-submit emby-button">Rebuild All Playouts</button>
                     <div id="task-status" class="status-card"></div>
                 </div>
+                <div class="card section-card">
+                    <h2>Catalog cleanup</h2>
+                    <p class="hint">Items removed from Jellyfin are marked missing first. After the grace period, the cleanup task deletes them. Items that return in a later catalog sync are restored. The task also runs daily with the other scheduled jobs.</p>
+                    <label class="field">
+                        <span>Grace period (days)</span>
+                        <input id="catalog-cleanup-grace" type="number" min="0" max="90" step="1" value="7" class="emby-input">
+                    </label>
+                    <div class="actions">
+                        <button type="button" id="btn-save-catalog-cleanup" class="emby-button">Save Grace Period</button>
+                        <button type="button" id="btn-run-catalog-cleanup" class="raised button-submit emby-button">Run Catalog Cleanup</button>
+                    </div>
+                    <p id="catalog-cleanup-status" class="hint">Loading catalog cleanup status…</p>
+                    <p class="hint">Scan checks each catalog path after remap (Jellyfin prefix → local prefix). If that file or folder exists on this server, the item is present. Missing files are marked missing and deleted after the grace period.</p>
+                    <div class="actions">
+                        <button type="button" id="btn-scan-local-catalog" class="raised button-submit emby-button">Scan Local Files</button>
+                    </div>
+                    <p id="catalog-local-scan-status" class="hint">Loading local file scan status…</p>
+                </div>
             </section>
         </div>
 

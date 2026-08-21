@@ -68,6 +68,8 @@ public class PluginConfiguration
 
     public JellyfinLibrarySettings JellyfinLibraries { get; set; } = new();
 
+    public CatalogCleanupSettings CatalogCleanup { get; set; } = new();
+
     public AiSettings Ai { get; set; } = new();
 
     public List<Guid> AiPendingAutoApplyChannelIds { get; set; } = new();
@@ -141,6 +143,60 @@ public class ChannelAutoTaggingTaskState
     public int TaggedItems { get; set; }
 
     public int SkippedItems { get; set; }
+
+    public string? LastError { get; set; }
+
+    public DateTime? LastStartedAt { get; set; }
+
+    public DateTime? LastCompletedAt { get; set; }
+}
+
+public class CatalogCleanupSettings
+{
+    /// <summary>
+    /// Days a catalog row stays marked missing before the cleanup task deletes it.
+    /// </summary>
+    public int GracePeriodDays { get; set; } = 7;
+
+    public DateTime? LastCatalogSyncStartedAt { get; set; }
+
+    public DateTime? LastCatalogSyncCompletedAt { get; set; }
+
+    public CatalogCleanupTaskState TaskState { get; set; } = new();
+
+    public CatalogLocalScanTaskState LocalScan { get; set; } = new();
+}
+
+public class CatalogCleanupTaskState
+{
+    public bool IsRunning { get; set; }
+
+    public int MarkedMissing { get; set; }
+
+    public int Removed { get; set; }
+
+    public string? LastError { get; set; }
+
+    public DateTime? LastStartedAt { get; set; }
+
+    public DateTime? LastCompletedAt { get; set; }
+}
+
+public class CatalogLocalScanTaskState
+{
+    public bool IsRunning { get; set; }
+
+    public int TotalItems { get; set; }
+
+    public int ProcessedItems { get; set; }
+
+    public int Found { get; set; }
+
+    public int MarkedMissing { get; set; }
+
+    public int Restored { get; set; }
+
+    public int Skipped { get; set; }
 
     public string? LastError { get; set; }
 

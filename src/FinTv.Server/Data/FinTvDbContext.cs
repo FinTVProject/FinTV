@@ -44,6 +44,16 @@ public class FinTvDbContext : DbContext
 
     public DbSet<MediaChapter> MediaChapters => Set<MediaChapter>();
 
+    public DbSet<TvShowRow> TvShows => Set<TvShowRow>();
+
+    public DbSet<MovieRow> Movies => Set<MovieRow>();
+
+    public DbSet<MusicRow> Music => Set<MusicRow>();
+
+    public DbSet<MusicVideoRow> MusicVideos => Set<MusicVideoRow>();
+
+    public DbSet<PastTenseNewsRow> PastTenseNews => Set<PastTenseNewsRow>();
+
     public DbSet<PathMapping> PathMappings => Set<PathMapping>();
 
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
@@ -129,6 +139,7 @@ public class FinTvDbContext : DbContext
             entity.HasIndex(e => e.ParentId);
             entity.HasIndex(e => e.SeriesId);
             entity.HasIndex(e => e.LibraryId);
+            entity.HasIndex(e => e.IsMissing);
             entity.HasMany(e => e.Chapters).WithOne(e => e.MediaItem).HasForeignKey(e => e.MediaItemId).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -150,6 +161,27 @@ public class FinTvDbContext : DbContext
         modelBuilder.Entity<NewsFeed>(entity =>
         {
             entity.HasIndex(e => e.SortOrder);
+        });
+
+        ConfigureCatalogTable<TvShowRow>(modelBuilder, "TvShows");
+        ConfigureCatalogTable<MovieRow>(modelBuilder, "Movies");
+        ConfigureCatalogTable<MusicRow>(modelBuilder, "Music");
+        ConfigureCatalogTable<MusicVideoRow>(modelBuilder, "MusicVideos");
+        ConfigureCatalogTable<PastTenseNewsRow>(modelBuilder, "PastTenseNews");
+    }
+
+    private static void ConfigureCatalogTable<TEntity>(ModelBuilder modelBuilder, string tableName)
+        where TEntity : CatalogMediaRow
+    {
+        modelBuilder.Entity<TEntity>(entity =>
+        {
+            entity.ToTable(tableName);
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Name);
+            entity.HasIndex(e => e.LibraryId);
+            entity.HasIndex(e => e.JellyfinItemId);
+            entity.HasIndex(e => e.Path);
+            entity.HasIndex(e => e.IsMissing);
         });
     }
 }

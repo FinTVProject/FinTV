@@ -1,3 +1,4 @@
+using FinTv;
 using FinTv.Auth;
 using FinTv.Configuration;
 using FinTv.Domain;
@@ -239,14 +240,20 @@ public class SetupSettingsRequest
 public class TasksController : ControllerBase
 {
     private readonly PlayoutBuilderService _playoutBuilder;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly CatalogCleanupService _catalogCleanup;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TasksController"/> class.
     /// </summary>
-    /// <param name="playoutBuilder">Playout builder service.</param>
-    public TasksController(PlayoutBuilderService playoutBuilder)
+    public TasksController(
+        PlayoutBuilderService playoutBuilder,
+        IServiceScopeFactory scopeFactory,
+        CatalogCleanupService catalogCleanup)
     {
         _playoutBuilder = playoutBuilder;
+        _scopeFactory = scopeFactory;
+        _catalogCleanup = catalogCleanup;
     }
 
     /// <summary>
@@ -259,4 +266,116 @@ public class TasksController : ControllerBase
         _playoutBuilder.QueueForceRebuildAllChannels();
         return Accepted(new { queued = true });
     }
+
+    [HttpGet("catalog-cleanup")]
+    public async Task<ActionResult<object>> GetCatalogCleanup(CancellationToken cancellationToken)
+        => Ok(await BuildCatalogCleanupStatusAsync(cancellationToken));
+
+    [HttpPut("catalog-cleanup")]
+    public async Task<ActionResult<object>> UpdateCatalogCleanup(
+        [FromBody] CatalogCleanupSettingsRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var plugin = FinTvRuntime.Current;
+        if (plugin is null)
+        {
+            return NotFound();
+        }
+
+        if (request?.GracePeriodDays is int days)
+        {
+            plugin.Configuration.CatalogCleanup.GracePeriodDays = CatalogCleanupService.ClampGracePeriodDays(days);
+            plugin.SaveConfiguration();
+        }
+
+        return Ok(await BuildCatalogCleanupStatusAsync(cancellationToken));
+    }
+
+    [HttpPost("catalog-cleanup/run")]
+    public async Task<IActionResult> RunCatalogCleanup(CancellationToken cancellationToken)
+    {
+        var status = await _catalogCleanup.GetStatusAsync(cancellationToken);
+        if (status.IsRunning)
+        {
+            return Ok(new { queued = false, alreadyRunning = true, status = await BuildCatalogCleanupStatusAsync(cancellationToken) });
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var cleanup = scope.ServiceProvider.GetRequiredService<CatalogCleanupService>();
+                await cleanup.RunAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Admin polls status for errors.
+            }
+        });
+
+        return Accepted(new { queued = true, status = await BuildCatalogCleanupStatusAsync(cancellationToken) });
+    }
+
+    private async Task<object> BuildCatalogCleanupStatusAsync(CancellationToken cancellationToken)
+    {
+        var status = await _catalogCleanup.GetStatusAsync(cancellationToken);
+        return new
+        {
+            gracePeriodDays = status.GracePeriodDays,
+            isRunning = status.IsRunning,
+            markedMissing = status.MarkedMissing,
+            removed = status.Removed,
+            currentlyMissing = status.CurrentlyMissing,
+            lastError = status.LastError,
+            lastStartedAt = status.LastStartedAt,
+            lastCompletedAt = status.LastCompletedAt,
+            lastCatalogSyncStartedAt = status.LastCatalogSyncStartedAt,
+            lastCatalogSyncCompletedAt = status.LastCatalogSyncCompletedAt,
+            localScan = new
+            {
+                isRunning = status.LocalScanIsRunning,
+                totalItems = status.LocalScanTotalItems,
+                processedItems = status.LocalScanProcessedItems,
+                found = status.LocalScanFound,
+                markedMissing = status.LocalScanMarkedMissing,
+                restored = status.LocalScanRestored,
+                skipped = status.LocalScanSkipped,
+                lastError = status.LocalScanLastError,
+                lastStartedAt = status.LocalScanLastStartedAt,
+                lastCompletedAt = status.LocalScanLastCompletedAt
+            }
+        };
+    }
+
+    [HttpPost("catalog-cleanup/scan-local")]
+    public async Task<IActionResult> ScanLocalCatalogFiles(CancellationToken cancellationToken)
+    {
+        var status = await _catalogCleanup.GetStatusAsync(cancellationToken);
+        if (status.IsRunning || status.LocalScanIsRunning)
+        {
+            return Ok(new { queued = false, alreadyRunning = true, status = await BuildCatalogCleanupStatusAsync(cancellationToken) });
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var cleanup = scope.ServiceProvider.GetRequiredService<CatalogCleanupService>();
+                await cleanup.ScanLocalFilesAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Admin polls status for errors.
+            }
+        });
+
+        return Accepted(new { queued = true, status = await BuildCatalogCleanupStatusAsync(cancellationToken) });
+    }
+}
+
+public class CatalogCleanupSettingsRequest
+{
+    public int? GracePeriodDays { get; set; }
 }

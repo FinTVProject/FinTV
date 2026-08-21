@@ -82,18 +82,35 @@ public sealed class PathRemapService
     public string? ResolveExistingPath(string? jellyfinPath)
     {
         var remapped = Remap(jellyfinPath);
-        if (!string.IsNullOrWhiteSpace(remapped) && File.Exists(remapped))
+        if (LocalPathExists(remapped))
         {
             return remapped;
         }
 
-        if (!string.IsNullOrWhiteSpace(jellyfinPath) && File.Exists(jellyfinPath))
+        if (LocalPathExists(jellyfinPath))
         {
             return jellyfinPath;
         }
 
         return remapped;
     }
+
+    /// <summary>
+    /// True when the Jellyfin path, after remap, exists as a local file or folder.
+    /// </summary>
+    public bool ExistsAtRemappedPath(string? jellyfinPath, IReadOnlyList<PathMapping>? mappings = null)
+    {
+        var remapped = Remap(jellyfinPath, mappings);
+        if (LocalPathExists(remapped))
+        {
+            return true;
+        }
+
+        return LocalPathExists(jellyfinPath);
+    }
+
+    public static bool LocalPathExists(string? path)
+        => !string.IsNullOrWhiteSpace(path) && (File.Exists(path) || Directory.Exists(path));
 
     public async Task<object> TestAsync(int sampleSize, CancellationToken cancellationToken = default)
     {
@@ -111,7 +128,7 @@ public sealed class PathRemapService
         foreach (var item in items)
         {
             var local = Remap(item.Path, mappings);
-            var found = !string.IsNullOrWhiteSpace(local) && File.Exists(local);
+            var found = ExistsAtRemappedPath(item.Path, mappings);
             if (found)
             {
                 exists++;

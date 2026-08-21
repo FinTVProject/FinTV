@@ -1,4 +1,5 @@
 using FinTv.Data;
+using FinTv.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -25,6 +26,10 @@ public class DatabaseInitializer : IHostedService
         await EnsureNewsColumnsAsync(db, cancellationToken);
         await EnsureChannelColumnsAsync(db, cancellationToken);
         await EnsureMediaItemColumnsAsync(db, cancellationToken);
+        await EnsureCatalogTablesAsync(db, cancellationToken);
+        await EnsureCatalogMissingColumnsAsync(db, cancellationToken);
+        await scope.ServiceProvider.GetRequiredService<CatalogTypedStore>()
+            .BackfillFromMediaItemsAsync(cancellationToken);
 
         if (!await db.AppSettings.AnyAsync(cancellationToken))
         {
@@ -121,6 +126,107 @@ public class DatabaseInitializer : IHostedService
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "MediaItem schema ensure skipped for {Sql}", sql);
+            }
+        }
+    }
+
+    private async Task EnsureCatalogTablesAsync(FinTvDbContext db, CancellationToken cancellationToken)
+    {
+        var shared = """
+            "Id" uuid NOT NULL,
+            "Name" text NOT NULL,
+            "SortName" text NULL,
+            "Plot" text NULL,
+            "OfficialRating" text NULL,
+            "CommunityRating" double precision NULL,
+            "CriticRating" double precision NULL,
+            "ProductionYear" integer NULL,
+            "PremiereDate" timestamp with time zone NULL,
+            "RuntimeTicks" bigint NULL,
+            "Format" text NULL,
+            "VideoCodec" text NULL,
+            "AudioCodec" text NULL,
+            "Width" integer NULL,
+            "Height" integer NULL,
+            "Path" text NULL,
+            "JellyfinItemId" uuid NOT NULL,
+            "ImdbId" text NULL,
+            "TmdbId" text NULL,
+            "TvdbId" text NULL,
+            "MusicBrainzId" text NULL,
+            "ProviderIdsJson" text NOT NULL DEFAULT '{}',
+            "LibraryId" uuid NULL,
+            "LibraryName" text NULL,
+            "PrimaryImagePath" text NULL,
+            "GenresJson" text NOT NULL DEFAULT '[]',
+            "StarsJson" text NOT NULL DEFAULT '[]',
+            "StudiosJson" text NOT NULL DEFAULT '[]',
+            "TagsJson" text NOT NULL DEFAULT '[]',
+            "ChaptersJson" text NOT NULL DEFAULT '[]',
+            "SyncedAt" timestamp with time zone NOT NULL,
+            "IsMissing" boolean NOT NULL DEFAULT FALSE,
+            "MissingSince" timestamp with time zone NULL,
+            """;
+
+        var statements = new[]
+        {
+            $"""CREATE TABLE IF NOT EXISTS "TvShows" ({shared} "SeriesId" uuid NULL, "SeriesName" text NULL, "SeasonNumber" integer NULL, "EpisodeNumber" integer NULL, "IsSeries" boolean NOT NULL DEFAULT FALSE, CONSTRAINT "PK_TvShows" PRIMARY KEY ("Id"))""",
+            $"""CREATE TABLE IF NOT EXISTS "Movies" ({shared} CONSTRAINT "PK_Movies" PRIMARY KEY ("Id"))""",
+            $"""CREATE TABLE IF NOT EXISTS "Music" ({shared} "Album" text NULL, "AlbumArtist" text NULL, "ArtistsJson" text NOT NULL DEFAULT '[]', "TrackNumber" integer NULL, "DiscNumber" integer NULL, CONSTRAINT "PK_Music" PRIMARY KEY ("Id"))""",
+            $"""CREATE TABLE IF NOT EXISTS "MusicVideos" ({shared} "Album" text NULL, "ArtistsJson" text NOT NULL DEFAULT '[]', CONSTRAINT "PK_MusicVideos" PRIMARY KEY ("Id"))""",
+            $"""CREATE TABLE IF NOT EXISTS "PastTenseNews" ({shared} "SeriesId" uuid NULL, "SeriesName" text NULL, "SeasonNumber" integer NULL, "EpisodeNumber" integer NULL, CONSTRAINT "PK_PastTenseNews" PRIMARY KEY ("Id"))""",
+            """CREATE INDEX IF NOT EXISTS "IX_TvShows_Name" ON "TvShows" ("Name")""",
+            """CREATE INDEX IF NOT EXISTS "IX_TvShows_LibraryId" ON "TvShows" ("LibraryId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_TvShows_JellyfinItemId" ON "TvShows" ("JellyfinItemId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_Movies_Name" ON "Movies" ("Name")""",
+            """CREATE INDEX IF NOT EXISTS "IX_Movies_LibraryId" ON "Movies" ("LibraryId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_Movies_JellyfinItemId" ON "Movies" ("JellyfinItemId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_Music_Name" ON "Music" ("Name")""",
+            """CREATE INDEX IF NOT EXISTS "IX_Music_LibraryId" ON "Music" ("LibraryId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_Music_JellyfinItemId" ON "Music" ("JellyfinItemId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_MusicVideos_Name" ON "MusicVideos" ("Name")""",
+            """CREATE INDEX IF NOT EXISTS "IX_MusicVideos_LibraryId" ON "MusicVideos" ("LibraryId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_MusicVideos_JellyfinItemId" ON "MusicVideos" ("JellyfinItemId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_PastTenseNews_Name" ON "PastTenseNews" ("Name")""",
+            """CREATE INDEX IF NOT EXISTS "IX_PastTenseNews_LibraryId" ON "PastTenseNews" ("LibraryId")""",
+            """CREATE INDEX IF NOT EXISTS "IX_PastTenseNews_JellyfinItemId" ON "PastTenseNews" ("JellyfinItemId")"""
+        };
+
+        foreach (var sql in statements)
+        {
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Catalog table ensure failed for {Sql}", sql);
+            }
+        }
+    }
+
+    private async Task EnsureCatalogMissingColumnsAsync(FinTvDbContext db, CancellationToken cancellationToken)
+    {
+        var tables = new[] { "MediaItems", "TvShows", "Movies", "Music", "MusicVideos", "PastTenseNews" };
+        foreach (var table in tables)
+        {
+            var statements = new[]
+            {
+                $"""ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "IsMissing" boolean NOT NULL DEFAULT FALSE""",
+                $"""ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "MissingSince" timestamp with time zone NULL""",
+                $"""CREATE INDEX IF NOT EXISTS "IX_{table}_IsMissing" ON "{table}" ("IsMissing")"""
+            };
+
+            foreach (var sql in statements)
+            {
+                try
+                {
+                    await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Catalog missing-column ensure skipped for {Sql}", sql);
+                }
             }
         }
     }

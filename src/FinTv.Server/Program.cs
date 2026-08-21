@@ -77,11 +77,14 @@ builder.Services.AddSingleton<StreamService>();
 builder.Services.AddSingleton<WeatherRendererHost>();
 builder.Services.AddSingleton<AiChannelGenerateJobService>();
 builder.Services.AddSingleton<AiLineupAutoApplyTask>();
+builder.Services.AddSingleton<CatalogCleanupTask>();
 builder.Services.AddSingleton<PlayoutBuilderService>();
 builder.Services.AddSingleton<BlackframeChapterTask>();
 
 builder.Services.AddScoped<PathRemapService>();
 builder.Services.AddScoped<CatalogLibraryManager>();
+builder.Services.AddScoped<CatalogTypedStore>();
+builder.Services.AddScoped<CatalogCleanupService>();
 builder.Services.AddScoped<ILibraryManager>(sp => sp.GetRequiredService<CatalogLibraryManager>());
 builder.Services.AddScoped<IChapterManager>(sp => sp.GetRequiredService<CatalogLibraryManager>());
 builder.Services.AddScoped<ChannelService>();

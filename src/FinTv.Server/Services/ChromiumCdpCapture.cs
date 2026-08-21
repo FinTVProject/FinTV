@@ -54,11 +54,11 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
         {
             FileName = chrome,
             UseShellExecute = false,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
+            RedirectStandardError = false,
+            RedirectStandardOutput = false,
             ArgumentList =
             {
-                "--headless=new",
+                "--headless",
                 "--disable-gpu",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
@@ -66,13 +66,20 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
                 "--mute-audio",
                 "--no-first-run",
                 "--disable-extensions",
+                "--disable-background-networking",
                 "--remote-allow-origins=*",
                 "--user-data-dir=" + userData,
+                "--remote-debugging-address=127.0.0.1",
                 "--remote-debugging-port=" + port,
                 "--window-size=" + width + "," + height,
                 "about:blank"
             }
         }) ?? throw new InvalidOperationException("Failed to start Chromium.");
+
+        if (_chromium.HasExited)
+        {
+            throw new InvalidOperationException("Chromium exited immediately. Exit code " + _chromium.ExitCode + ".");
+        }
 
         var wsUrl = await WaitForPageDebuggerUrlAsync(port, pageUrl, cancellationToken);
         _socket = new ClientWebSocket();
@@ -269,7 +276,7 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
     private static async Task<string> WaitForPageDebuggerUrlAsync(int port, string pageUrl, CancellationToken cancellationToken)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-        var deadline = DateTime.UtcNow.AddSeconds(20);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
         Exception? last = null;
         while (DateTime.UtcNow < deadline)
         {
@@ -291,7 +298,7 @@ public sealed class ChromiumCdpCapture : IAsyncDisposable
             catch (Exception ex)
             {
                 last = ex;
-                await Task.Delay(200, cancellationToken);
+                await Task.Delay(300, cancellationToken);
             }
         }
 

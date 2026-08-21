@@ -8,6 +8,7 @@ namespace FinTv.Services;
 
 /// <summary>
 /// Postgres-backed stand-in for Jellyfin ILibraryManager + IChapterManager.
+/// Reads TvShows/Movies/Music/MusicVideos/PastTenseNews, with MediaItems as fallback.
 /// </summary>
 public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
 {
@@ -22,119 +23,386 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
 
     public BaseItem? GetItemById(Guid id)
     {
-        var row = _db.MediaItems.AsNoTracking().Include(i => i.Chapters).FirstOrDefault(i => i.Id == id);
-        return row is null ? null : Map(row);
+        var tv = _db.TvShows.AsNoTracking().FirstOrDefault(row => row.Id == id);
+        if (tv is not null)
+        {
+            var item = Map(tv, tv.IsSeries ? BaseItemKind.Series : BaseItemKind.Episode);
+            if (item is Episode episode && tv.SeriesId is Guid seriesId && seriesId != Guid.Empty)
+            {
+                var series = _db.TvShows.AsNoTracking().FirstOrDefault(row => row.Id == seriesId && row.IsSeries);
+                if (series is not null)
+                {
+                    episode.Series = Map(series, BaseItemKind.Series) as Series;
+                }
+            }
+
+            return item;
+        }
+
+        var movie = _db.Movies.AsNoTracking().FirstOrDefault(row => row.Id == id);
+        if (movie is not null)
+        {
+            return Map(movie, BaseItemKind.Movie);
+        }
+
+        var music = _db.Music.AsNoTracking().FirstOrDefault(row => row.Id == id);
+        if (music is not null)
+        {
+            return Map(music, BaseItemKind.Audio);
+        }
+
+        var video = _db.MusicVideos.AsNoTracking().FirstOrDefault(row => row.Id == id);
+        if (video is not null)
+        {
+            return Map(video, BaseItemKind.MusicVideo);
+        }
+
+        var news = _db.PastTenseNews.AsNoTracking().FirstOrDefault(row => row.Id == id);
+        if (news is not null)
+        {
+            return MapNews(news);
+        }
+
+        var reported = FinTvRuntime.Current?.Configuration.JellyfinLibraries.Libraries
+            .FirstOrDefault(library => library.Id == id);
+        if (reported is not null)
+        {
+            return new CollectionFolder
+            {
+                Id = reported.Id,
+                Name = reported.Name,
+                CollectionType = reported.CollectionType,
+                Kind = BaseItemKind.Folder,
+                LibraryId = reported.Id,
+                LibraryName = reported.Name
+            };
+        }
+
+        var row = _db.MediaItems.AsNoTracking().FirstOrDefault(item => item.Id == id);
+        return row is null ? null : Map(row, includeSeries: true);
     }
 
     public QueryResult<BaseItem> GetItemsResult(InternalItemsQuery query)
     {
-        IQueryable<MediaItem> items = _db.MediaItems.AsNoTracking().Include(i => i.Chapters);
+        var kinds = query.IncludeItemTypes is { Length: > 0 }
+            ? query.IncludeItemTypes.ToHashSet()
+            : null;
+        var items = QueryTyped(query, kinds);
+        var typedIds = items.Select(item => item.Id).ToHashSet();
+        items.AddRange(QueryMediaItems(query, kinds).Where(item => !typedIds.Contains(item.Id)));
 
-        if (query.IncludeItemTypes is { Length: > 0 })
-        {
-            var kinds = query.IncludeItemTypes.ToArray();
-            items = items.Where(i => kinds.Contains(i.Kind));
-        }
-
-        if (query.ParentId != Guid.Empty)
-        {
-            items = items.Where(i => i.ParentId == query.ParentId || i.SeriesId == query.ParentId);
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Name))
-        {
-            var name = query.Name;
-            items = items.Where(i =>
-                i.Name == name
-                || (i.CollectionNamesJson != null && i.CollectionNamesJson.Contains(name)));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.SearchTerm))
-        {
-            var term = query.SearchTerm;
-            items = items.Where(i => i.Name.Contains(term) || (i.Overview != null && i.Overview.Contains(term)));
-        }
-
-        var list = items.ToList();
         var librarySync = FinTvRuntime.Current?.Configuration.JellyfinLibraries;
         if (librarySync is not null)
         {
-            list = list.Where(item => librarySync.Allows(item.Kind, item.LibraryId)).ToList();
+            items = items.Where(item => librarySync.Allows(item.Kind, item.LibraryId)).ToList();
         }
 
         if (query.Tags is { Length: > 0 })
         {
-            list = list.Where(item =>
-            {
-                var tags = ReadStringArray(item.TagsJson);
-                return query.Tags.All(required =>
-                    tags.Any(tag => tag.Equals(required, StringComparison.OrdinalIgnoreCase)));
-            }).ToList();
+            items = items.Where(item => query.Tags.All(required =>
+                item.Tags.Any(tag => tag.Equals(required, StringComparison.OrdinalIgnoreCase)))).ToList();
         }
 
         if (query.Genres is { Length: > 0 })
         {
-            list = list.Where(item =>
-            {
-                var genres = ReadStringArray(item.GenresJson);
-                return query.Genres.Any(required =>
-                    genres.Any(genre => genre.Equals(required, StringComparison.OrdinalIgnoreCase)));
-            }).ToList();
+            items = items.Where(item => query.Genres.Any(required =>
+                item.Genres.Any(genre => genre.Equals(required, StringComparison.OrdinalIgnoreCase)))).ToList();
         }
 
-        list = list
-            .OrderBy(i => i.SortName ?? i.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(i => i.ParentIndexNumber ?? 0)
-            .ThenBy(i => i.IndexNumber ?? 0)
+        items = items
+            .OrderBy(item => item.SortName ?? item.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.ParentIndexNumber)
+            .ThenBy(item => item.IndexNumber)
             .ToList();
 
         if (query.Limit is > 0)
         {
-            list = list.Take(query.Limit.Value).ToList();
+            items = items.Take(query.Limit.Value).ToList();
         }
 
-        return new QueryResult<BaseItem> { Items = list.Select(Map).ToList() };
+        return new QueryResult<BaseItem> { Items = items };
     }
 
     public IReadOnlyList<VirtualFolderInfo> GetVirtualFolders()
     {
-        return _db.MediaItems.AsNoTracking()
-            .Where(i => i.Kind == BaseItemKind.Folder)
-            .Select(i => new VirtualFolderInfo
+        var reported = FinTvRuntime.Current?.Configuration.JellyfinLibraries.Libraries;
+        if (reported is { Count: > 0 })
+        {
+            return reported
+                .Where(library => library.Id != Guid.Empty)
+                .Select(library => new VirtualFolderInfo
+                {
+                    ItemId = library.Id.ToString(),
+                    Name = library.Name,
+                    CollectionType = library.CollectionType
+                })
+                .ToList();
+        }
+
+        return DistinctLibraries()
+            .Select(library => new VirtualFolderInfo
             {
-                ItemId = i.Id.ToString(),
-                Name = i.Name,
-                CollectionType = i.CollectionType
+                ItemId = library.Id.ToString(),
+                Name = library.Name,
+                CollectionType = library.CollectionType
             })
             .ToList();
     }
 
     public CollectionFolder GetUserRootFolder()
     {
-        var folders = _db.MediaItems.AsNoTracking()
-            .Where(i => i.Kind == BaseItemKind.Folder)
-            .ToList()
-            .Select(Map)
+        var children = GetVirtualFolders()
+            .Select(folder =>
+            {
+                Guid.TryParse(folder.ItemId, out var id);
+                return new CollectionFolder
+                {
+                    Id = id,
+                    Name = folder.Name,
+                    CollectionType = folder.CollectionType,
+                    Kind = BaseItemKind.Folder,
+                    LibraryId = id == Guid.Empty ? null : id,
+                    LibraryName = folder.Name
+                };
+            })
+            .Cast<BaseItem>()
             .ToList();
 
         return new CollectionFolder
         {
             Id = Guid.Empty,
             Name = "Media",
-            Children = folders
+            Children = children
         };
     }
 
     public IReadOnlyList<ChapterInfo> GetChapters(Guid itemId)
     {
-        return _db.MediaChapters.AsNoTracking()
-            .Where(c => c.MediaItemId == itemId)
-            .OrderBy(c => c.StartPositionTicks)
-            .Select(c => new ChapterInfo { StartPositionTicks = c.StartPositionTicks, Name = c.Name })
+        var fromMedia = _db.MediaChapters.AsNoTracking()
+            .Where(chapter => chapter.MediaItemId == itemId)
+            .OrderBy(chapter => chapter.StartPositionTicks)
+            .Select(chapter => new ChapterInfo { StartPositionTicks = chapter.StartPositionTicks, Name = chapter.Name })
             .ToList();
+        if (fromMedia.Count > 0)
+        {
+            return fromMedia;
+        }
+
+        var json = _db.TvShows.AsNoTracking().Where(row => row.Id == itemId).Select(row => row.ChaptersJson).FirstOrDefault()
+            ?? _db.Movies.AsNoTracking().Where(row => row.Id == itemId).Select(row => row.ChaptersJson).FirstOrDefault()
+            ?? _db.Music.AsNoTracking().Where(row => row.Id == itemId).Select(row => row.ChaptersJson).FirstOrDefault()
+            ?? _db.MusicVideos.AsNoTracking().Where(row => row.Id == itemId).Select(row => row.ChaptersJson).FirstOrDefault()
+            ?? _db.PastTenseNews.AsNoTracking().Where(row => row.Id == itemId).Select(row => row.ChaptersJson).FirstOrDefault();
+        return ParseChapters(json);
     }
 
-    public BaseItem Map(MediaItem row)
+    private List<BaseItem> QueryTyped(InternalItemsQuery query, HashSet<BaseItemKind>? kinds)
+    {
+        var items = new List<BaseItem>();
+        var wantAll = kinds is null || kinds.Count == 0;
+        var parentId = query.ParentId;
+
+        if (wantAll || kinds!.Contains(BaseItemKind.Series) || kinds.Contains(BaseItemKind.Episode))
+        {
+            IQueryable<TvShowRow> tv = _db.TvShows.AsNoTracking().Where(row => !row.IsMissing);
+            if (kinds is { Count: > 0 })
+            {
+                if (kinds.Contains(BaseItemKind.Series) && !kinds.Contains(BaseItemKind.Episode))
+                {
+                    tv = tv.Where(row => row.IsSeries);
+                }
+                else if (kinds.Contains(BaseItemKind.Episode) && !kinds.Contains(BaseItemKind.Series))
+                {
+                    tv = tv.Where(row => !row.IsSeries);
+                }
+            }
+
+            if (parentId != Guid.Empty)
+            {
+                tv = tv.Where(row => row.SeriesId == parentId || row.Id == parentId || row.LibraryId == parentId);
+            }
+
+            tv = ApplyNameFilter(tv, query);
+            items.AddRange(tv.AsEnumerable().Select(row =>
+                Map(row, row.IsSeries ? BaseItemKind.Series : BaseItemKind.Episode)));
+        }
+
+        if (wantAll || kinds!.Contains(BaseItemKind.Episode))
+        {
+            IQueryable<PastTenseNewsRow> news = _db.PastTenseNews.AsNoTracking().Where(row => !row.IsMissing);
+            if (parentId != Guid.Empty)
+            {
+                news = news.Where(row => row.SeriesId == parentId || row.Id == parentId || row.LibraryId == parentId);
+            }
+
+            news = ApplyNameFilter(news, query);
+            items.AddRange(news.AsEnumerable().Select(MapNews));
+        }
+
+        if (wantAll || kinds!.Contains(BaseItemKind.Movie) || kinds.Contains(BaseItemKind.Video))
+        {
+            IQueryable<MovieRow> movies = _db.Movies.AsNoTracking().Where(row => !row.IsMissing);
+            if (parentId != Guid.Empty)
+            {
+                movies = movies.Where(row => row.LibraryId == parentId || row.Id == parentId);
+            }
+
+            movies = ApplyNameFilter(movies, query);
+            items.AddRange(movies.AsEnumerable().Select(row => Map(row, BaseItemKind.Movie)));
+        }
+
+        if (wantAll || kinds!.Contains(BaseItemKind.Audio))
+        {
+            IQueryable<MusicRow> music = _db.Music.AsNoTracking().Where(row => !row.IsMissing);
+            if (parentId != Guid.Empty)
+            {
+                music = music.Where(row => row.LibraryId == parentId || row.Id == parentId);
+            }
+
+            music = ApplyNameFilter(music, query);
+            items.AddRange(music.AsEnumerable().Select(row => Map(row, BaseItemKind.Audio)));
+        }
+
+        if (wantAll || kinds!.Contains(BaseItemKind.MusicVideo))
+        {
+            IQueryable<MusicVideoRow> videos = _db.MusicVideos.AsNoTracking().Where(row => !row.IsMissing);
+            if (parentId != Guid.Empty)
+            {
+                videos = videos.Where(row => row.LibraryId == parentId || row.Id == parentId);
+            }
+
+            videos = ApplyNameFilter(videos, query);
+            items.AddRange(videos.AsEnumerable().Select(row => Map(row, BaseItemKind.MusicVideo)));
+        }
+
+        return items;
+    }
+
+    private List<BaseItem> QueryMediaItems(InternalItemsQuery query, HashSet<BaseItemKind>? kinds)
+    {
+        IQueryable<MediaItem> items = _db.MediaItems.AsNoTracking().Where(item => !item.IsMissing);
+        if (kinds is { Count: > 0 })
+        {
+            var kindList = kinds.ToArray();
+            items = items.Where(item => kindList.Contains(item.Kind));
+        }
+
+        if (query.ParentId != Guid.Empty)
+        {
+            var parentId = query.ParentId;
+            items = items.Where(item =>
+                item.ParentId == parentId || item.SeriesId == parentId || item.LibraryId == parentId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Name))
+        {
+            var name = query.Name;
+            items = items.Where(item =>
+                item.Name == name
+                || (item.CollectionNamesJson != null && item.CollectionNamesJson.Contains(name)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.SearchTerm))
+        {
+            var term = query.SearchTerm;
+            items = items.Where(item => item.Name.Contains(term) || (item.Overview != null && item.Overview.Contains(term)));
+        }
+
+        return items.ToList().Select(row => Map(row, includeSeries: false)).ToList();
+    }
+
+    private static IQueryable<T> ApplyNameFilter<T>(IQueryable<T> query, InternalItemsQuery request)
+        where T : CatalogMediaRow
+    {
+        if (!string.IsNullOrWhiteSpace(request.Name))
+        {
+            var name = request.Name;
+            query = query.Where(row => row.Name == name);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        {
+            var term = request.SearchTerm;
+            query = query.Where(row => row.Name.Contains(term) || (row.Plot != null && row.Plot.Contains(term)));
+        }
+
+        return query;
+    }
+
+    private IEnumerable<(Guid Id, string Name, string? CollectionType)> DistinctLibraries()
+    {
+        var fromConfig = FinTvRuntime.Current?.Configuration.JellyfinLibraries.Libraries ?? [];
+        if (fromConfig.Count > 0)
+        {
+            return fromConfig.Select(library => (library.Id, library.Name, library.CollectionType));
+        }
+
+        return _db.MediaItems.AsNoTracking()
+            .Where(item => item.Kind == BaseItemKind.Folder && item.LibraryId == null)
+            .Select(item => new { item.Id, item.Name, item.CollectionType })
+            .AsEnumerable()
+            .Select(item => (item.Id, item.Name, item.CollectionType));
+    }
+
+    private BaseItem MapNews(PastTenseNewsRow row)
+    {
+        var item = Map(row, BaseItemKind.Episode);
+        item.SeriesId = row.SeriesId ?? Guid.Empty;
+        item.SeriesName = row.SeriesName;
+        item.IndexNumber = row.EpisodeNumber;
+        item.ParentIndexNumber = row.SeasonNumber;
+        return item;
+    }
+
+    private BaseItem Map(CatalogMediaRow row, BaseItemKind kind)
+    {
+        BaseItem item = kind switch
+        {
+            BaseItemKind.Episode => new Episode(),
+            BaseItemKind.Movie => new Movie(),
+            BaseItemKind.Series => new Series(),
+            BaseItemKind.MusicVideo => new MusicVideo(),
+            BaseItemKind.Audio => new Audio(),
+            _ => new BaseItem()
+        };
+
+        item.Id = row.Id;
+        item.Name = row.Name;
+        item.SortName = row.SortName;
+        item.Overview = row.Plot;
+        item.Path = _remap.ResolveExistingPath(row.Path) ?? row.Path;
+        item.OfficialRating = row.OfficialRating;
+        item.ProductionYear = row.ProductionYear;
+        item.PremiereDate = row.PremiereDate;
+        item.RunTimeTicks = row.RuntimeTicks;
+        item.LibraryId = row.LibraryId;
+        item.LibraryName = row.LibraryName;
+        item.PrimaryImagePath = _remap.ResolveExistingPath(row.PrimaryImagePath) ?? row.PrimaryImagePath;
+        item.Tags = ReadStringArray(row.TagsJson);
+        item.Genres = ReadStringArray(row.GenresJson);
+        item.Studios = ReadStringArray(row.StudiosJson);
+        item.Chapters = ParseChapters(row.ChaptersJson);
+        item.Kind = kind;
+        item.ParentId = row.LibraryId ?? Guid.Empty;
+
+        if (row is TvShowRow tv)
+        {
+            item.SeriesId = tv.SeriesId ?? Guid.Empty;
+            item.SeriesName = tv.SeriesName;
+            item.IndexNumber = tv.EpisodeNumber;
+            item.ParentIndexNumber = tv.SeasonNumber;
+        }
+
+        if (row is MusicRow track)
+        {
+            item.IndexNumber = track.TrackNumber;
+            item.ParentIndexNumber = track.DiscNumber;
+        }
+
+        return item;
+    }
+
+    private BaseItem Map(MediaItem row, bool includeSeries)
     {
         BaseItem item = row.Kind switch
         {
@@ -171,22 +439,51 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
         item.Genres = ReadStringArray(row.GenresJson);
         item.Studios = ReadStringArray(row.StudiosJson);
         item.CollectionNames = ReadStringArray(row.CollectionNamesJson);
-        item.Chapters = row.Chapters
-            .OrderBy(c => c.StartPositionTicks)
-            .Select(c => new ChapterInfo { StartPositionTicks = c.StartPositionTicks, Name = c.Name })
-            .ToList();
         item.Kind = row.Kind;
 
-        if (item is Episode episode && row.SeriesId is Guid seriesId && seriesId != Guid.Empty)
+        if (includeSeries && item is Episode episode && row.SeriesId is Guid seriesId && seriesId != Guid.Empty)
         {
-            var seriesRow = _db.MediaItems.AsNoTracking().FirstOrDefault(i => i.Id == seriesId);
-            if (seriesRow is not null)
+            var seriesRow = _db.TvShows.AsNoTracking().FirstOrDefault(tv => tv.Id == seriesId)
+                ?? (CatalogMediaRow?)null;
+            if (seriesRow is TvShowRow series)
             {
-                episode.Series = Map(seriesRow) as Series;
+                episode.Series = Map(series, BaseItemKind.Series) as Series;
+            }
+            else
+            {
+                var mediaSeries = _db.MediaItems.AsNoTracking().FirstOrDefault(media => media.Id == seriesId);
+                if (mediaSeries is not null)
+                {
+                    episode.Series = Map(mediaSeries, includeSeries: false) as Series;
+                }
             }
         }
 
         return item;
+    }
+
+    private static List<ChapterInfo> ParseChapters(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json) || json == "[]")
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<ChapterDto>>(json)?
+                .Select(chapter => new ChapterInfo
+                {
+                    StartPositionTicks = chapter.StartPositionTicks,
+                    Name = chapter.Name
+                })
+                .ToList()
+                ?? [];
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private static string[] ReadStringArray(string? json)
@@ -204,5 +501,12 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
         {
             return [];
         }
+    }
+
+    private sealed class ChapterDto
+    {
+        public long StartPositionTicks { get; set; }
+
+        public string? Name { get; set; }
     }
 }

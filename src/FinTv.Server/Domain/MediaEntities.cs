@@ -72,6 +72,16 @@ public class MediaItem
 
     public DateTime SyncedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// True when the item was not present in the latest Jellyfin catalog sync.
+    /// </summary>
+    public bool IsMissing { get; set; }
+
+    /// <summary>
+    /// UTC time the item was first marked missing. Cleared if it returns in a later sync.
+    /// </summary>
+    public DateTime? MissingSince { get; set; }
+
     public ICollection<MediaChapter> Chapters { get; set; } = new List<MediaChapter>();
 }
 

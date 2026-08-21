@@ -4020,6 +4020,166 @@
         }
     }
 
+    let catalogCleanupPollTimer = null;
+
+    function renderCatalogCleanupStatus(status) {
+        const el = $('catalog-cleanup-status');
+        const runBtn = $('btn-run-catalog-cleanup');
+        const grace = $('catalog-cleanup-grace');
+        if (!el || !status) {
+            return;
+        }
+
+        if (grace && typeof status.gracePeriodDays === 'number') {
+            grace.value = String(status.gracePeriodDays);
+        }
+
+        if (status.isRunning) {
+            el.textContent = 'Catalog cleanup is running… marking missing items, scanning remapped local files, then deleting rows past the grace period.';
+            if (runBtn) {
+                runBtn.disabled = true;
+                runBtn.textContent = 'Cleaning…';
+            }
+            renderCatalogLocalScanStatus(status);
+            return;
+        }
+
+        if (runBtn) {
+            runBtn.disabled = !!status.localScan?.isRunning;
+            runBtn.textContent = 'Run Catalog Cleanup';
+        }
+
+        if (status.lastError) {
+            el.textContent =
+                `Last run failed: ${status.lastError}` +
+                (status.lastCompletedAt ? ` · previous success ${new Date(status.lastCompletedAt).toLocaleString()}` : '');
+        } else if (status.lastCompletedAt) {
+            el.textContent =
+                `Last run ${new Date(status.lastCompletedAt).toLocaleString()}: marked ${status.markedMissing} missing, removed ${status.removed}. ` +
+                `${status.currentlyMissing} catalog row(s) currently missing (waiting on the ${status.gracePeriodDays}-day grace period).`;
+        } else {
+            el.textContent =
+                `${status.currentlyMissing} catalog row(s) currently missing. Grace period is ${status.gracePeriodDays} day(s). Run cleanup after a catalog sync, or wait for the daily task.`;
+        }
+
+        renderCatalogLocalScanStatus(status);
+    }
+
+    function renderCatalogLocalScanStatus(status) {
+        const el = $('catalog-local-scan-status');
+        const scanBtn = $('btn-scan-local-catalog');
+        const scan = status?.localScan;
+        if (!el) {
+            return;
+        }
+
+        if (scan?.isRunning) {
+            el.textContent =
+                `Scanning remapped local files… ${scan.processedItems}/${scan.totalItems} checked · ${scan.found} found · ${scan.restored} restored · ${scan.markedMissing} marked missing.`;
+            if (scanBtn) {
+                scanBtn.disabled = true;
+                scanBtn.textContent = 'Scanning…';
+            }
+            return;
+        }
+
+        if (scanBtn) {
+            scanBtn.disabled = !!status?.isRunning;
+            scanBtn.textContent = 'Scan Local Files';
+        }
+
+        if (scan?.lastError) {
+            el.textContent =
+                `Last scan failed: ${scan.lastError}` +
+                (scan.lastCompletedAt ? ` · previous success ${new Date(scan.lastCompletedAt).toLocaleString()}` : '');
+            return;
+        }
+
+        if (scan?.lastCompletedAt) {
+            el.textContent =
+                `Last scan ${new Date(scan.lastCompletedAt).toLocaleString()}: ${scan.found} file(s) present at remapped paths, restored ${scan.restored}, marked ${scan.markedMissing} missing, skipped ${scan.skipped} with no path.`;
+            return;
+        }
+
+        el.textContent = 'Scan catalog items against remapped local files. If the remapped path exists, the Jellyfin item is present.';
+    }
+
+    async function loadCatalogCleanup() {
+        if (!syncConfigPage()) {
+            return;
+        }
+
+        try {
+            const status = await api('/tasks/catalog-cleanup');
+            renderCatalogCleanupStatus(status);
+            if (status.isRunning || status.localScan?.isRunning) {
+                startCatalogCleanupPolling();
+            } else {
+                stopCatalogCleanupPolling();
+            }
+        } catch (err) {
+            const el = $('catalog-cleanup-status');
+            if (el) {
+                el.textContent = 'Could not load catalog cleanup status.';
+            }
+        }
+    }
+
+    function startCatalogCleanupPolling() {
+        if (catalogCleanupPollTimer) {
+            return;
+        }
+
+        catalogCleanupPollTimer = setInterval(() => {
+            loadCatalogCleanup().catch(() => {});
+        }, 3000);
+    }
+
+    function stopCatalogCleanupPolling() {
+        if (catalogCleanupPollTimer) {
+            clearInterval(catalogCleanupPollTimer);
+            catalogCleanupPollTimer = null;
+        }
+    }
+
+    async function saveCatalogCleanupSettings() {
+        const days = Number($('catalog-cleanup-grace')?.value || '7');
+        const status = await api('/tasks/catalog-cleanup', {
+            method: 'PUT',
+            body: JSON.stringify({ gracePeriodDays: days })
+        });
+        renderCatalogCleanupStatus(status);
+        toast('Catalog cleanup grace period saved.', 'success');
+    }
+
+    async function runCatalogCleanup() {
+        const result = await api('/tasks/catalog-cleanup/run', { method: 'POST' });
+        if (result.alreadyRunning) {
+            toast('Catalog cleanup is already running.', 'info');
+        } else {
+            toast('Catalog cleanup started.', 'success');
+        }
+        if (result.status) {
+            renderCatalogCleanupStatus(result.status);
+        }
+        startCatalogCleanupPolling();
+        await loadCatalogCleanup();
+    }
+
+    async function runCatalogLocalScan() {
+        const result = await api('/tasks/catalog-cleanup/scan-local', { method: 'POST' });
+        if (result.alreadyRunning) {
+            toast('A catalog scan or cleanup is already running.', 'info');
+        } else {
+            toast('Local file scan started.', 'success');
+        }
+        if (result.status) {
+            renderCatalogCleanupStatus(result.status);
+        }
+        startCatalogCleanupPolling();
+        await loadCatalogCleanup();
+    }
+
     async function loadGeneral() {
         try {
             const [settings, timeZones] = await Promise.all([
@@ -5089,6 +5249,7 @@
         if (name === 'lineups') loadLineups();
         if (name === 'list') loadLists();
         if (name === 'jellyfin') loadJellyfinLibraries();
+        if (name === 'tasks') loadCatalogCleanup();
         if (name === 'special') loadSpecialPresentations();
         if (name === 'commercials') loadCommercials();
         if (name === 'commercialbrainz') loadCommercialBrainz();
@@ -5234,6 +5395,9 @@
                 $('task-status').textContent = 'Rebuild all playouts running in background…';
             })
             .catch((e) => toast(e.message, 'error')));
+        click('btn-save-catalog-cleanup', () => saveCatalogCleanupSettings().catch((e) => toast(e.message, 'error')));
+        click('btn-run-catalog-cleanup', () => runCatalogCleanup().catch((e) => toast(e.message, 'error')));
+        click('btn-scan-local-catalog', () => runCatalogLocalScan().catch((e) => toast(e.message, 'error')));
 
         qa('.btn-copy').forEach((btn) => btn.onclick = () => copyText(btn.dataset.copyTarget));
         click('btn-save-general', saveGeneralSettings);

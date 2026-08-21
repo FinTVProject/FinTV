@@ -46,6 +46,8 @@ Then:
 4. Install the FinTV plugin, set Server URL + API key, run **FinTV Catalog Sync**
 5. Join FinTV Server and Jellyfin to the **same Docker network** as your PostgreSQL instance
 
+Items removed from Jellyfin, or whose remapped local file is gone, are marked missing, then deleted by **Tasks → Catalog cleanup** after the grace period (default 7 days). **Scan Local Files** checks each catalog path after remap.
+
 Unraid: point `POSTGRES_HOST` at your existing Postgres container on a custom network with Jellyfin. Pass `/dev/dri` into the container for Intel VAAPI encode/decode (enabled by default as `FFMPEG_HWACCEL=vaapi`).
 
 The plugin registers the Live TV tuner and XMLTV guide automatically when you set the FinTV Server URL and API key.

@@ -16,10 +16,28 @@ namespace FinTv.Api;
 public class PluginBridgeController : ControllerBase
 {
     private readonly FinTvDbContext _db;
+    private readonly CatalogTypedStore _typedCatalog;
+    private readonly CatalogCleanupService _catalogCleanup;
 
-    public PluginBridgeController(FinTvDbContext db)
+    public PluginBridgeController(FinTvDbContext db, CatalogTypedStore typedCatalog, CatalogCleanupService catalogCleanup)
     {
         _db = db;
+        _typedCatalog = typedCatalog;
+        _catalogCleanup = catalogCleanup;
+    }
+
+    [HttpPost("catalog/sync/begin")]
+    public IActionResult BeginCatalogSync()
+    {
+        _catalogCleanup.BeginCatalogSync();
+        return Ok(new { startedAt = FinTvRuntime.Current?.Configuration.CatalogCleanup.LastCatalogSyncStartedAt });
+    }
+
+    [HttpPost("catalog/sync/complete")]
+    public async Task<IActionResult> CompleteCatalogSync(CancellationToken cancellationToken)
+    {
+        var marked = await _catalogCleanup.CompleteCatalogSyncAsync(cancellationToken);
+        return Ok(new { markedMissing = marked });
     }
 
     [HttpPost("catalog")]
@@ -31,11 +49,6 @@ public class PluginBridgeController : ControllerBase
         }
 
         var incomingIds = request.Items.Select(i => i.Id).ToHashSet();
-        if (request.ReplaceAll)
-        {
-            var stale = await _db.MediaItems.Where(i => !incomingIds.Contains(i.Id)).ToListAsync(cancellationToken);
-            _db.MediaItems.RemoveRange(stale);
-        }
 
         foreach (var item in request.Items)
         {
@@ -83,6 +96,8 @@ public class PluginBridgeController : ControllerBase
             row.ArtistsJson = JsonSerializer.Serialize(item.Artists ?? []);
             row.AlbumArtistsJson = JsonSerializer.Serialize(item.AlbumArtists ?? []);
             row.SyncedAt = DateTime.UtcNow;
+            row.IsMissing = false;
+            row.MissingSince = null;
 
             _db.MediaChapters.RemoveRange(row.Chapters);
             row.Chapters.Clear();
@@ -100,7 +115,13 @@ public class PluginBridgeController : ControllerBase
             }
         }
 
+        await _typedCatalog.UpsertAsync(request.Items, request.ReplaceAll, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
+        if (request.ReplaceAll)
+        {
+            await _catalogCleanup.MarkMissingExceptAsync(incomingIds, cancellationToken);
+        }
+
         if (request.Libraries is { Count: > 0 })
         {
             SaveReportedLibraries(request.Libraries);
@@ -464,6 +485,20 @@ public class CatalogItemDto
     public Dictionary<string, string>? ProviderIds { get; set; }
 
     public List<CatalogChapterDto>? Chapters { get; set; }
+
+    public string? Format { get; set; }
+
+    public string? Container { get; set; }
+
+    public string? VideoCodec { get; set; }
+
+    public string? AudioCodec { get; set; }
+
+    public int? Width { get; set; }
+
+    public int? Height { get; set; }
+
+    public string? AlbumArtist { get; set; }
 }
 
 public class CatalogPersonDto

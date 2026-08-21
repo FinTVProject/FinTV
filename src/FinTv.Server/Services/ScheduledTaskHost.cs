@@ -1,4 +1,5 @@
 using FinTv.Domain;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -31,6 +32,8 @@ public sealed class ScheduledTaskHost : BackgroundService
                 using var scope = _scopeFactory.CreateScope();
                 var task = scope.ServiceProvider.GetRequiredService<AiLineupAutoApplyTask>();
                 await task.ExecuteAsync(new Progress<double>(), stoppingToken);
+                var cleanup = scope.ServiceProvider.GetRequiredService<CatalogCleanupTask>();
+                await cleanup.ExecuteAsync(new Progress<double>(), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
