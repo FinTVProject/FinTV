@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FinTv;
 using FinTv.Data;
 using FinTv.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -55,6 +56,11 @@ public sealed class CatalogLibraryManager : ILibraryManager, IChapterManager
         }
 
         var list = items.ToList();
+        var librarySync = FinTvRuntime.Current?.Configuration.JellyfinLibraries;
+        if (librarySync is not null)
+        {
+            list = list.Where(item => librarySync.Allows(item.Kind, item.LibraryId)).ToList();
+        }
 
         if (query.Tags is { Length: > 0 })
         {

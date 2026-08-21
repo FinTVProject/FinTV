@@ -91,7 +91,23 @@ public class ChannelService
         existing.PlayoutSeed = updated.PlayoutSeed;
         existing.WeatherLocationQuery = updated.WeatherLocationQuery;
         existing.FilterJson = updated.FilterJson;
+        existing.CatalogMode = updated.CatalogMode;
+        existing.AiFineTunePrompt = updated.AiFineTunePrompt;
+        existing.CommercialSearchPlaylistIdsJson = updated.CommercialSearchPlaylistIdsJson;
 
+        await _db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<Channel?> UpdateWeatherLocationAsync(Guid id, string locationQuery, CancellationToken cancellationToken = default)
+    {
+        var existing = await _db.Channels.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (existing is null || existing.ContentType != ChannelContentType.Weather)
+        {
+            return null;
+        }
+
+        existing.WeatherLocationQuery = locationQuery;
         await _db.SaveChangesAsync(cancellationToken);
         return existing;
     }

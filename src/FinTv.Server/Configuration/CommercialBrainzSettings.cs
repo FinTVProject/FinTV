@@ -84,3 +84,22 @@ public class CommercialBrainzSyncState
 
     public int LibraryCount { get; set; }
 }
+
+public class CommercialSearchPlaylist
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Query { get; set; } = string.Empty;
+
+    public int MaxResults { get; set; } = 50;
+
+    public DateTime? LastSyncedAt { get; set; }
+
+    public int LastMatchedCount { get; set; }
+
+    public string? LastError { get; set; }
+
+    public List<string> VideoSbids { get; set; } = new();
+}

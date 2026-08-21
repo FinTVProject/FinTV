@@ -18,6 +18,12 @@ public class PluginConfiguration
 
     public string? PublicBaseUrl { get; set; }
 
+    /// <summary>
+    /// Shared secret for the Jellyfin plugin and IPTV <c>?apiKey=</c> URLs.
+    /// Generated at startup when missing and edited on the General page.
+    /// </summary>
+    public string? ApiKey { get; set; }
+
     public EbsBackgroundMusicSource EbsBackgroundMusicSource { get; set; } = EbsBackgroundMusicSource.NamedLibrary;
 
     public string EbsBackgroundMusicLibraryName { get; set; } = "Background Music";
@@ -40,6 +46,8 @@ public class PluginConfiguration
     public string WeatherStarPermalinkQuery { get; set; } =
         "hazards=true&current-weather=true&latest-observations=true&hourly=true&hourly-graph=true&travel=true&regional-forecast=true&local-forecast=true&extended-forecast=true&almanac=true&spc-outlook=true&radar=true&stickyKiosk=true&customTextEnable=false&speed=1.00&viewMode=standard&units=us&customText=&mediaVolume=0.75&wide=false&portrait=false&enhanced=false&scanLines=false";
 
+    public string? WeatherDefaultLocationQuery { get; set; }
+
     public bool AutoStartPlaywrightDockerSidecar { get; set; }
 
     public bool AutoStartWeatherStarDocker { get; set; } = true;
@@ -56,6 +64,10 @@ public class PluginConfiguration
 
     public CommercialBrainzSettings CommercialBrainz { get; set; } = new();
 
+    public List<CommercialSearchPlaylist> CommercialSearchPlaylists { get; set; } = new();
+
+    public JellyfinLibrarySettings JellyfinLibraries { get; set; } = new();
+
     public AiSettings Ai { get; set; } = new();
 
     public List<Guid> AiPendingAutoApplyChannelIds { get; set; } = new();
@@ -65,6 +77,11 @@ public class PluginConfiguration
     public Ws4kpDockerSettings Ws4kp { get; set; } = new();
 
     public Ws3kpDockerSettings Ws3kp { get; set; } = new();
+
+    /// <summary>
+    /// Active WeatherStar engine. Only one of WS4000 or WS3000 runs at a time.
+    /// </summary>
+    public string WeatherStarVariant { get; set; } = "ws4kp";
 }
 
 public class Ws4kpDockerSettings : IWeatherStarDockerSettings
@@ -182,6 +199,52 @@ public class AiGenerateAllJobState
     public DateTime? LastProgressAt { get; set; }
 
     public bool WasStale { get; set; }
+}
+
+/// <summary>
+/// Which Jellyfin libraries FinTV should use for TV, movies, music, and music videos.
+/// Empty lists mean every matching library.
+/// </summary>
+public class JellyfinLibrarySettings
+{
+    public List<Guid> TvLibraryIds { get; set; } = new();
+
+    public List<Guid> MovieLibraryIds { get; set; } = new();
+
+    public List<Guid> MusicLibraryIds { get; set; } = new();
+
+    public List<Guid> MusicVideoLibraryIds { get; set; } = new();
+
+    public bool Allows(BaseItemKind kind, Guid? libraryId)
+    {
+        if (kind is BaseItemKind.Folder or BaseItemKind.Playlist)
+        {
+            return true;
+        }
+
+        var selected = kind switch
+        {
+            BaseItemKind.Series or BaseItemKind.Episode => TvLibraryIds,
+            BaseItemKind.Movie => MovieLibraryIds,
+            BaseItemKind.Audio => MusicLibraryIds,
+            BaseItemKind.MusicVideo => MusicVideoLibraryIds,
+            _ => null
+        };
+
+        if (selected is not { Count: > 0 })
+        {
+            return true;
+        }
+
+        return libraryId is Guid id && selected.Contains(id);
+    }
+
+    public static List<Guid> Normalize(IEnumerable<Guid>? ids)
+        => ids?
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList()
+            ?? new List<Guid>();
 }
 
 public class WeatherGuideSlotCache

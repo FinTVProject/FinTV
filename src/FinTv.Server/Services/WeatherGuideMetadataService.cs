@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using FinTv.Configuration;
 using FinTv.Data;
@@ -517,6 +518,12 @@ internal static class WeatherLocationParser
             return $"{lat.ToString("F2", CultureInfo.InvariantCulture)}, {lon.ToString("F2", CultureInfo.InvariantCulture)}";
         }
 
+        var zip = ExtractZip(query);
+        if (!string.IsNullOrWhiteSpace(zip))
+        {
+            return zip;
+        }
+
         var parts = query.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length >= 3 && !LooksNumeric(parts[0]))
         {
@@ -534,6 +541,29 @@ internal static class WeatherLocationParser
         }
 
         return query.Trim();
+    }
+
+    public static string? ExtractZip(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(query, @"\b(\d{5})(?:-\d{4})?\b");
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    public static string NormalizeZip(string? zip)
+    {
+        var trimmed = (zip ?? string.Empty).Trim();
+        var match = Regex.Match(trimmed, @"^(\d{5})(?:-\d{4})?$");
+        if (!match.Success)
+        {
+            throw new ArgumentException("Enter a 5-digit US ZIP code.");
+        }
+
+        return match.Groups[1].Value;
     }
 
     private static bool LooksNumeric(string value)

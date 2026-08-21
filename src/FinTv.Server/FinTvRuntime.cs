@@ -55,10 +55,24 @@ public sealed class FinTvRuntime
         if (row is null || string.IsNullOrWhiteSpace(row.Json))
         {
             _configuration = new PluginConfiguration();
+        }
+        else
+        {
+            _configuration = FinTvJson.Deserialize<PluginConfiguration>(row.Json) ?? new PluginConfiguration();
+        }
+
+        EnsureApiKey();
+    }
+
+    private void EnsureApiKey()
+    {
+        if (!string.IsNullOrWhiteSpace(_configuration.ApiKey))
+        {
             return;
         }
 
-        _configuration = FinTvJson.Deserialize<PluginConfiguration>(row.Json) ?? new PluginConfiguration();
+        _configuration.ApiKey = Auth.PluginApiKey.Generate();
+        SaveConfiguration();
     }
 
     public void SaveConfiguration()

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using FinTv;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -11,6 +12,7 @@ public sealed class WeatherRendererHost : IHostedService, IDisposable
 {
     private readonly ILogger<WeatherRendererHost> _logger;
     private readonly IWebHostEnvironment _env;
+    private readonly SemaphoreSlim _gate = new(1, 1);
     private Process? _ws4;
     private Process? _ws3;
 
@@ -44,8 +46,19 @@ public sealed class WeatherRendererHost : IHostedService, IDisposable
         return WeatherStarDockerVariant.Ws4kp;
     }
 
+    public WeatherStarDockerVariant ActiveVariant
+        => Ws3Running && !Ws4Running
+            ? WeatherStarDockerVariant.Ws3kp
+            : WeatherStarDockerVariant.Ws4kp;
+
     public Task StartAsync(CancellationToken cancellationToken)
-        => EnsureRunningAsync(WeatherStarDockerVariant.Ws4kp, cancellationToken);
+    {
+        var saved = FinTvRuntime.Current?.Configuration.WeatherStarVariant;
+        var variant = string.Equals(saved, "ws3kp", StringComparison.OrdinalIgnoreCase)
+            ? WeatherStarDockerVariant.Ws3kp
+            : WeatherStarDockerVariant.Ws4kp;
+        return EnsureRunningAsync(variant, cancellationToken);
+    }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
@@ -53,20 +66,30 @@ public sealed class WeatherRendererHost : IHostedService, IDisposable
         await StopAsync(WeatherStarDockerVariant.Ws3kp, cancellationToken);
     }
 
-    public Task EnsureRunningAsync(WeatherStarDockerVariant variant, CancellationToken cancellationToken)
+    public async Task EnsureRunningAsync(WeatherStarDockerVariant variant, CancellationToken cancellationToken)
     {
-        _ = cancellationToken;
-        if (variant == WeatherStarDockerVariant.Ws4kp && !Ws4Running)
+        await _gate.WaitAsync(cancellationToken);
+        try
         {
-            _ws4 = StartNode("ws4kp", 8080);
-        }
+            var other = variant == WeatherStarDockerVariant.Ws4kp
+                ? WeatherStarDockerVariant.Ws3kp
+                : WeatherStarDockerVariant.Ws4kp;
+            StopUnlocked(other);
 
-        if (variant == WeatherStarDockerVariant.Ws3kp && !Ws3Running)
+            if (variant == WeatherStarDockerVariant.Ws4kp && !Ws4Running)
+            {
+                _ws4 = StartNode("ws4kp", 8080);
+            }
+
+            if (variant == WeatherStarDockerVariant.Ws3kp && !Ws3Running)
+            {
+                _ws3 = StartNode("ws3kp", 8083);
+            }
+        }
+        finally
         {
-            _ws3 = StartNode("ws3kp", 8083);
+            _gate.Release();
         }
-
-        return Task.CompletedTask;
     }
 
     public async Task WaitUntilReadyAsync(WeatherStarDockerVariant variant, CancellationToken cancellationToken)
@@ -94,9 +117,22 @@ public sealed class WeatherRendererHost : IHostedService, IDisposable
         _logger.LogWarning("Weather renderer on port {Port} did not become ready", port);
     }
 
-    public Task StopAsync(WeatherStarDockerVariant variant, CancellationToken cancellationToken)
+    public async Task StopAsync(WeatherStarDockerVariant variant, CancellationToken cancellationToken)
     {
         _ = cancellationToken;
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            StopUnlocked(variant);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private void StopUnlocked(WeatherStarDockerVariant variant)
+    {
         if (variant == WeatherStarDockerVariant.Ws4kp)
         {
             TryKill(ref _ws4);
@@ -105,8 +141,6 @@ public sealed class WeatherRendererHost : IHostedService, IDisposable
         {
             TryKill(ref _ws3);
         }
-
-        return Task.CompletedTask;
     }
 
     public void Dispose()

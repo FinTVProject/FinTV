@@ -1,3 +1,4 @@
+using FinTv.Auth;
 using FinTv.Configuration;
 using FinTv.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -27,7 +28,8 @@ public class GeneralController : ControllerBase
             {
                 debugLogging = config.DebugLogging,
                 scheduleTimeZone,
-                playoutDaysToBuild = config.PlayoutDaysToBuild
+                playoutDaysToBuild = config.PlayoutDaysToBuild,
+                apiKey = PluginApiKey.Resolve() ?? string.Empty
             });
         }
         catch (Exception ex)
@@ -100,12 +102,32 @@ public class GeneralController : ControllerBase
                 plugin.Configuration.PlayoutDaysToBuild = Math.Clamp(request.PlayoutDaysToBuild.Value, 1, 14);
             }
 
+            if (request.GenerateApiKey == true)
+            {
+                plugin.Configuration.ApiKey = PluginApiKey.Generate();
+            }
+            else if (request.ApiKey is not null)
+            {
+                var apiKey = request.ApiKey.Trim();
+                if (apiKey.Length > 0 && apiKey.Length < 8)
+                {
+                    return BadRequest(new { message = "API key must be at least 8 characters." });
+                }
+
+                if (apiKey.Length > 0)
+                {
+                    plugin.Configuration.ApiKey = apiKey;
+                }
+            }
+
             plugin.SaveConfiguration();
             return Ok(new
             {
                 saved = true,
                 debugLogging = plugin.Configuration.DebugLogging,
-                scheduleTimeZone = plugin.Configuration.ScheduleTimeZone
+                scheduleTimeZone = plugin.Configuration.ScheduleTimeZone,
+                playoutDaysToBuild = plugin.Configuration.PlayoutDaysToBuild,
+                apiKey = PluginApiKey.Resolve() ?? string.Empty
             });
         }
         catch (Exception ex)
@@ -134,4 +156,14 @@ public class GeneralSettingsRequest
     /// Gets or sets how many days of playout to build (1-14).
     /// </summary>
     public int? PlayoutDaysToBuild { get; set; }
+
+    /// <summary>
+    /// Gets or sets the shared secret for the Jellyfin plugin and IPTV URLs.
+    /// </summary>
+    public string? ApiKey { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether to replace the plugin API key with a newly generated value.
+    /// </summary>
+    public bool? GenerateApiKey { get; set; }
 }

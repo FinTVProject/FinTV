@@ -51,6 +51,10 @@
     let listNameCache = {};
     let specialPresentations = [];
     let specialChannelId = null;
+    let commercialSearchPlaylists = [];
+    let selectedSearchPlaylistId = null;
+    let deepEditingChannelId = null;
+    let deepChannelPlaylistIds = [];
     let guideData = null;
     let guideFromIso = null;
     let guideDateFilter = null;
@@ -228,6 +232,9 @@
         channel.contentType = resolveEnumValue(CONTENT_TYPE_VALUES, channel.contentType, 0);
         channel.aspectRatio = resolveEnumValue(ASPECT_RATIO_VALUES, channel.aspectRatio, 0);
         channel.bugPlacement = resolveEnumValue(BUG_PLACEMENT_VALUES, channel.bugPlacement, 0);
+        channel.commercialSearchPlaylistIds = Array.isArray(channel.commercialSearchPlaylistIds)
+            ? channel.commercialSearchPlaylistIds
+            : [];
         return channel;
     }
 
@@ -251,8 +258,21 @@
         return resolveEnumValue(map, select.value, fallback);
     }
 
-    function buildChannelPayload(form) {
+    function existingChannelDeepFields(channel) {
+        const c = channel || (editingChannelId ? channels.find((x) => x.id === editingChannelId) : null);
         return {
+            FilterJson: c?.filterJson ?? null,
+            CatalogMode: c?.catalogMode ?? null,
+            AiFineTunePrompt: c?.aiFineTunePrompt ?? null,
+            CommercialPresetId: c?.commercialPresetId ?? null,
+            CommercialSearchPlaylistIds: Array.isArray(c?.commercialSearchPlaylistIds)
+                ? c.commercialSearchPlaylistIds.slice()
+                : []
+        };
+    }
+
+    function buildChannelPayload(form) {
+        return Object.assign(existingChannelDeepFields(form.channel), {
             Number: form.number,
             Name: form.name,
             ContentType: form.contentType,
@@ -264,7 +284,7 @@
             LogoFileName: form.logoFileName,
             WeatherLocationQuery: form.weatherLocationQuery,
             Enabled: form.enabled
-        };
+        }, form.deep || {});
     }
 
     function isEmptyApiBody(data) {
@@ -573,7 +593,8 @@
             return null;
         }
 
-        return location;
+        const zip = location.match(/\b(\d{5})(?:-\d{4})?\b/);
+        return zip ? zip[1] : location;
     }
 
     function splitWeatherPermalink(permalink) {
@@ -704,22 +725,29 @@
     }
 
     function toggleWeatherFields() {
-        const contentType = $('ch-content-type');
-        const weatherFields = $('weather-fields');
-        if (!contentType || !weatherFields) {
+        [['ch-content-type', 'weather-fields'], ['deep-ch-content-type', 'deep-weather-fields']].forEach(([typeId, fieldsId]) => {
+            const contentType = $(typeId);
+            const weatherFields = $(fieldsId);
+            if (!contentType || !weatherFields) {
+                return;
+            }
+
+            weatherFields.classList.toggle('hidden', contentType.value !== '4');
+        });
+    }
+
+    function populateLogoSelectors(channel, prefix) {
+        prefix = prefix || 'ch';
+        const setSelect = $(prefix + '-logo-set');
+        const fileSelect = $(prefix + '-logo-file');
+        if (!setSelect || !fileSelect) {
             return;
         }
 
-        weatherFields.classList.toggle('hidden', contentType.value !== '4');
-    }
-
-    function populateLogoSelectors(channel) {
-        const setSelect = $('ch-logo-set');
         setSelect.innerHTML = '<option value="">None</option>' + logoSets.map((s) =>
             `<option value="${s.id}">${escapeHtml(s.name)} (${(s.entries || []).length})</option>`).join('');
         setSelect.value = channel?.logoSetId || '';
 
-        const fileSelect = $('ch-logo-file');
         const set = logoSets.find((s) => s.id === (channel?.logoSetId || setSelect.value));
         fileSelect.innerHTML = '<option value="">Default</option>' + ((set && set.entries) || []).map((e) =>
             `<option value="${escapeHtml(e.fileName)}">${escapeHtml(e.displayName || e.fileName)}</option>`).join('');
@@ -824,15 +852,20 @@
                 <td><span class="badge badge-type">${contentTypeLabel(c.contentType)}</span></td>
                 <td>${renderChannelStatusBadges(c)}</td>
                 <td class="row-actions">
+                    <button type="button" data-quick-edit="${c.id}">Quick Edit</button>
                     <button type="button" data-edit="${c.id}">Edit</button>
                     <button type="button" data-lineup="${c.id}">Lineup</button>
                     <button type="button" class="btn-danger" data-delete="${c.id}">Delete</button>
                 </td>
             </tr>`).join('')}</tbody></table>`;
 
+        wrap.querySelectorAll('[data-quick-edit]').forEach((btn) => btn.onclick = (e) => {
+            e.stopPropagation();
+            editChannel(btn.dataset.quickEdit);
+        });
         wrap.querySelectorAll('[data-edit]').forEach((btn) => btn.onclick = (e) => {
             e.stopPropagation();
-            editChannel(btn.dataset.edit);
+            openChannelEditorWindow(btn.dataset.edit);
         });
         wrap.querySelectorAll('[data-lineup]').forEach((btn) => btn.onclick = (e) => {
             e.stopPropagation();
@@ -943,7 +976,7 @@
 
         editingChannelId = id;
         showChannelForm(true);
-        $('channel-form-title').textContent = `Edit ${c.name}`;
+        $('channel-form-title').textContent = `Quick Edit ${c.name}`;
         $('btn-delete-channel').classList.remove('hidden');
 
         $('ch-number').value = c.number;
@@ -954,7 +987,7 @@
         setSelectEnum('ch-bug', BUG_PLACEMENT_VALUES, c.bugPlacement, 0);
         $('ch-audio').value = c.audioLanguage || 'eng';
         if ($('ch-weather-location')) {
-            $('ch-weather-location').value = c.weatherLocationQuery || '';
+            $('ch-weather-location').value = parseWeatherLocationQuery(c.weatherLocationQuery) || '';
         }
         $('ch-enabled').checked = c.enabled;
         populateLogoSelectors(c);
@@ -1038,6 +1071,325 @@
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalLabel || 'Save';
+            }
+        }
+    }
+
+    function channelEditorPath(id) {
+        return '/channels/' + id + '/edit';
+    }
+
+    function channelEditorIdFromPath(pathname) {
+        const match = normalizePathname(pathname).match(/^\/channels\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/edit$/i);
+        return match ? match[1] : null;
+    }
+
+    function parseChannelFilter(filterJson) {
+        if (!filterJson) {
+            return {};
+        }
+
+        try {
+            return typeof filterJson === 'string' ? (JSON.parse(filterJson) || {}) : (filterJson || {});
+        } catch {
+            return {};
+        }
+    }
+
+    function libraryTagFromFilter(filterJson) {
+        const filter = parseChannelFilter(filterJson);
+        if (filter.presetId) {
+            return String(filter.presetId);
+        }
+
+        const tags = Array.isArray(filter.tags) ? filter.tags : [];
+        return tags.find((tag) => /^fintv-/i.test(tag)) || '';
+    }
+
+    function mergeLibraryTagIntoFilter(existingJson, libraryTag) {
+        const filter = parseChannelFilter(existingJson);
+        const tag = String(libraryTag || '').trim();
+        const otherTags = (Array.isArray(filter.tags) ? filter.tags : [])
+            .filter((item) => item && !/^fintv-/i.test(item) && item !== tag);
+        if (tag) {
+            filter.presetId = tag;
+            filter.tags = [tag].concat(otherTags);
+        } else {
+            delete filter.presetId;
+            if (otherTags.length) {
+                filter.tags = otherTags;
+            } else {
+                delete filter.tags;
+            }
+        }
+
+        return Object.keys(filter).length ? JSON.stringify(filter) : null;
+    }
+
+    function playlistSpotCount(playlist) {
+        if (!playlist) {
+            return 0;
+        }
+
+        if (playlist.itemCount != null) {
+            return playlist.itemCount;
+        }
+
+        if (playlist.lastMatchedCount != null) {
+            return playlist.lastMatchedCount;
+        }
+
+        return (playlist.videoSbids || []).length;
+    }
+
+    function setDeepEditorVisible(show) {
+        const editor = $('channel-deep-editor');
+        const app = $('fintv-app');
+        if (editor) {
+            editor.classList.toggle('hidden', !show);
+            editor.hidden = !show;
+        }
+
+        if (app) {
+            app.classList.toggle('hidden', !!show);
+        }
+
+        document.body.classList.toggle('channel-editor-open', !!show);
+        if (!show) {
+            deepEditingChannelId = null;
+            deepChannelPlaylistIds = [];
+        }
+    }
+
+    function fillDeepChannelPlaylistPicker() {
+        const picker = $('deep-ch-playlist-picker');
+        const addBtn = $('btn-deep-ch-add-playlist');
+        if (!picker) {
+            return;
+        }
+
+        const assigned = new Set(deepChannelPlaylistIds.map(String));
+        const available = commercialSearchPlaylists.filter((p) => !assigned.has(String(p.id)));
+        picker.innerHTML = available.length
+            ? available.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('')
+            : '<option value="">No more playlists</option>';
+        picker.disabled = available.length === 0;
+        if (addBtn) {
+            addBtn.disabled = available.length === 0;
+        }
+    }
+
+    function renderDeepChannelPlaylists() {
+        const wrap = $('deep-ch-playlists');
+        if (!wrap) {
+            return;
+        }
+
+        if (!deepChannelPlaylistIds.length) {
+            wrap.innerHTML = commercialSearchPlaylists.length
+                ? '<div class="playlist-empty">No playlists assigned. Commercial breaks use the default pool until you add one.</div>'
+                : '<div class="playlist-empty">No search playlists yet. Create them on the Commercials tab, then add them here.</div>';
+            fillDeepChannelPlaylistPicker();
+            return;
+        }
+
+        wrap.innerHTML = deepChannelPlaylistIds.map((id) => {
+            const playlist = commercialSearchPlaylists.find((p) => String(p.id) === String(id));
+            const name = playlist ? playlist.name : 'Missing playlist';
+            const query = playlist ? playlist.query : '';
+            const count = playlistSpotCount(playlist);
+            const missing = playlist ? '' : ' is-missing';
+            return `<div class="playlist-chip${missing}" data-id="${escapeHtml(id)}">
+                <div class="playlist-chip-main">
+                    <strong>${escapeHtml(name)}</strong>
+                    ${query ? `<span>${escapeHtml(query)}</span>` : ''}
+                </div>
+                <span class="playlist-chip-count">${count} spot${count === 1 ? '' : 's'}</span>
+                <button type="button" class="btn-ghost" data-remove-playlist="${escapeHtml(id)}" title="Remove">&times;</button>
+            </div>`;
+        }).join('');
+
+        wrap.querySelectorAll('[data-remove-playlist]').forEach((btn) => {
+            btn.onclick = () => removeDeepChannelPlaylist(btn.dataset.removePlaylist);
+        });
+        fillDeepChannelPlaylistPicker();
+    }
+
+    function addDeepChannelPlaylist() {
+        const picker = $('deep-ch-playlist-picker');
+        const id = picker && picker.value;
+        if (!id || deepChannelPlaylistIds.some((item) => String(item) === String(id))) {
+            return;
+        }
+
+        deepChannelPlaylistIds.push(id);
+        renderDeepChannelPlaylists();
+    }
+
+    function removeDeepChannelPlaylist(id) {
+        deepChannelPlaylistIds = deepChannelPlaylistIds.filter((item) => String(item) !== String(id));
+        renderDeepChannelPlaylists();
+    }
+
+    function fillDeepChannelForm(channel) {
+        deepEditingChannelId = channel.id;
+        deepChannelPlaylistIds = (channel.commercialSearchPlaylistIds || []).slice();
+        $('deep-ch-title').textContent = channel.name;
+        $('deep-ch-number').value = channel.number;
+        $('deep-ch-name').value = channel.name;
+        setSelectEnum('deep-ch-content-type', CONTENT_TYPE_VALUES, channel.contentType, 0);
+        setSelectEnum('deep-ch-aspect', ASPECT_RATIO_VALUES, channel.aspectRatio, 0);
+        $('deep-ch-scanlines').checked = !!channel.scanlinesEnabled;
+        setSelectEnum('deep-ch-bug', BUG_PLACEMENT_VALUES, channel.bugPlacement, 0);
+        $('deep-ch-audio').value = channel.audioLanguage || 'eng';
+        if ($('deep-ch-weather-location')) {
+            $('deep-ch-weather-location').value = parseWeatherLocationQuery(channel.weatherLocationQuery) || '';
+        }
+        $('deep-ch-enabled').checked = channel.enabled !== false;
+        $('deep-ch-library-tag').value = libraryTagFromFilter(channel.filterJson);
+        setSelectEnum('deep-ch-catalog-mode', { 0: 0, 1: 1, 2: 2, 3: 3 }, channel.catalogMode, 2);
+        $('deep-ch-ai-prompt').value = channel.aiFineTunePrompt || '';
+        populateLogoSelectors(channel, 'deep-ch');
+        toggleWeatherFields();
+        renderDeepChannelPlaylists();
+    }
+
+    async function openDeepChannelEditor(id, options) {
+        options = options || {};
+        const channel = channels.find((x) => String(x.id) === String(id));
+        if (!channel) {
+            toast('Channel not found.', 'error');
+            return;
+        }
+
+        try {
+            await loadLogoSetsForForm();
+        } catch (err) {
+            reportApiError(err, 'Could not load logo sets.');
+            return;
+        }
+
+        try {
+            commercialSearchPlaylists = await api('/commercials/search-playlists') || [];
+        } catch (err) {
+            commercialSearchPlaylists = commercialSearchPlaylists || [];
+        }
+
+        fillDeepChannelForm(channel);
+        setDeepEditorVisible(true);
+        document.title = 'Edit ' + channel.name + ' · FinTV';
+        window.dispatchEvent(new CustomEvent('fintv-tabchange', {
+            detail: {
+                tab: 'channels',
+                title: 'Edit ' + channel.name,
+                subtitle: formatChannelNumber(channel.number) + ' · Deep channel options'
+            }
+        }));
+
+        const path = channelEditorPath(channel.id);
+        if (!options.fromRoute && normalizePathname(location.pathname) !== path) {
+            history.pushState({ tab: 'channel-editor', id: channel.id }, '', path);
+        }
+    }
+
+    function closeDeepChannelEditor(options) {
+        options = options || {};
+        const wasOpen = document.body.classList.contains('channel-editor-open');
+        setDeepEditorVisible(false);
+        if (!wasOpen) {
+            return;
+        }
+
+        if (window.opener && !window.opener.closed && !options.stay) {
+            window.close();
+            return;
+        }
+
+        if (!options.skipHistory && channelEditorIdFromPath(location.pathname)) {
+            history.pushState({ tab: 'channels' }, '', '/channels');
+        }
+    }
+
+    function openChannelEditorWindow(id) {
+        const url = channelEditorPath(id);
+        const win = window.open(url, 'fintv-edit-' + id, 'width=1120,height=900');
+        if (!win) {
+            history.pushState({ tab: 'channel-editor', id }, '', url);
+            openDeepChannelEditor(id, { fromRoute: true });
+        }
+    }
+
+    async function saveDeepChannel() {
+        const channel = channels.find((x) => String(x.id) === String(deepEditingChannelId));
+        if (!channel) {
+            toast('Channel not found.', 'error');
+            return;
+        }
+
+        let number;
+        try {
+            number = parseChannelNumber($('deep-ch-number').value);
+        } catch (err) {
+            toast(err.message, 'error');
+            return;
+        }
+
+        let weatherLocationQuery = null;
+        try {
+            weatherLocationQuery = parseWeatherLocationQuery($('deep-ch-weather-location')?.value);
+        } catch (err) {
+            toast(err.message, 'error');
+            return;
+        }
+
+        const name = ($('deep-ch-name')?.value || '').trim();
+        if (!name) {
+            toast('Channel name is required.', 'error');
+            return;
+        }
+
+        const payload = buildChannelPayload({
+            channel,
+            number,
+            name,
+            contentType: readSelectEnum('deep-ch-content-type', CONTENT_TYPE_VALUES, 0),
+            aspectRatio: readSelectEnum('deep-ch-aspect', ASPECT_RATIO_VALUES, 0),
+            scanlinesEnabled: !!$('deep-ch-scanlines')?.checked,
+            bugPlacement: readSelectEnum('deep-ch-bug', BUG_PLACEMENT_VALUES, 0),
+            audioLanguage: $('deep-ch-audio')?.value.trim() || 'eng',
+            logoSetId: $('deep-ch-logo-set')?.value ? $('deep-ch-logo-set').value : null,
+            logoFileName: $('deep-ch-logo-file')?.value || null,
+            weatherLocationQuery,
+            enabled: !!$('deep-ch-enabled')?.checked,
+            deep: {
+                FilterJson: mergeLibraryTagIntoFilter(channel.filterJson, $('deep-ch-library-tag')?.value),
+                CatalogMode: readSelectEnum('deep-ch-catalog-mode', { 0: 0, 1: 1, 2: 2, 3: 3 }, 2),
+                AiFineTunePrompt: ($('deep-ch-ai-prompt')?.value || '').trim() || null,
+                CommercialSearchPlaylistIds: deepChannelPlaylistIds.slice()
+            }
+        });
+
+        const saveBtn = $('btn-deep-ch-save');
+        const originalLabel = saveBtn ? saveBtn.textContent : '';
+        try {
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving…';
+            }
+
+            await api('/channels/' + channel.id, { method: 'PUT', body: JSON.stringify(payload) });
+            toast('Channel updated.', 'success');
+            await loadChannels();
+            const updated = channels.find((x) => String(x.id) === String(channel.id));
+            if (updated) {
+                fillDeepChannelForm(updated);
+            }
+        } catch (err) {
+            reportApiError(err, 'Could not save channel.');
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = originalLabel || 'Save';
             }
         }
     }
@@ -1785,48 +2137,223 @@
         await saveBrainzSettings();
         await api('/commercials/brainz/sync', { method: 'POST' });
         toast('CommercialBrainz sync started.', 'success');
-        await loadBrainzSettings();
         const previewEl = $('brainz-preview');
         if (previewEl) {
             previewEl.dataset.loaded = '';
         }
-        await loadCommercials();
+        await loadCommercialBrainz();
+    }
+
+    function isBrainzCommercial(item) {
+        return item.source === 1 || item.source === 'CommercialBrainz';
+    }
+
+    function commercialDurationSeconds(item) {
+        const duration = item.duration;
+        if (typeof duration === 'number') {
+            return duration;
+        }
+        return Math.round((duration && duration.totalSeconds) || 0);
+    }
+
+    function renderCommercialTable(targetId, list, emptyMessage) {
+        const el = $(targetId);
+        if (!el) {
+            return;
+        }
+        if (!list || !list.length) {
+            el.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
+            return;
+        }
+
+        el.innerHTML = `<table class="data-table">
+            <thead><tr><th>Title</th><th>Brand</th><th>Duration</th><th>Year</th><th>Chapters</th></tr></thead>
+            <tbody>${list.map((c) => `<tr>
+                <td>${escapeHtml(c.title)}</td>
+                <td>${escapeHtml(c.brand || '')}</td>
+                <td>${commercialDurationSeconds(c)}s</td>
+                <td>${escapeHtml(String(c.year ?? ''))}</td>
+                <td>${(c.chapters || []).length}</td>
+            </tr>`).join('')}</tbody></table>`;
     }
 
     async function loadCommercials() {
         try {
             const list = await api('/commercials');
             const status = await api('/commercials/scan-status');
-            await loadBrainzSettings();
-            $('commercial-status').textContent = status ? JSON.stringify(status, null, 2) : 'No scan running.';
-
-            if (!list || !list.length) {
-                $('commercial-list').innerHTML = '<div class="empty-state">No commercials synced yet.</div>';
-            } else {
-                $('commercial-list').innerHTML = `<table class="data-table">
-                <thead><tr><th>Source</th><th>Title</th><th>Brand</th><th>Duration</th><th>Year</th><th>Chapters</th></tr></thead>
-                <tbody>${list.map((c) => `<tr>
-                    <td><span class="badge badge-type">${escapeHtml((c.source === 1 || c.source === 'CommercialBrainz') ? 'Brainz' : 'Jellyfin')}</span></td>
-                    <td>${escapeHtml(c.title)}</td>
-                    <td>${escapeHtml(c.brand || '')}</td>
-                    <td>${Math.round((c.duration && c.duration.totalSeconds) || 0)}s</td>
-                    <td>${escapeHtml(String(c.year ?? ''))}</td>
-                    <td>${(c.chapters || []).length}</td>
-                </tr>`).join('')}</tbody></table>`;
+            if ($('commercial-status')) {
+                $('commercial-status').textContent = status ? JSON.stringify(status, null, 2) : 'No scan running.';
             }
-
-            const previewEl = $('brainz-preview');
-            if (previewEl && previewEl.dataset.loaded !== '1') {
-                previewEl.dataset.loaded = '1';
-                try {
-                    await previewBrainz({ skipSave: true, silent: true });
-                } catch (previewErr) {
-                    previewEl.dataset.loaded = '';
-                    previewEl.innerHTML = `<div class="empty-state">${escapeHtml(previewErr.message || 'Could not load commercial preview.')}</div>`;
-                }
-            }
+            const jellyfin = (list || []).filter((c) => !isBrainzCommercial(c));
+            renderCommercialTable('commercial-list', jellyfin, 'No Jellyfin commercials synced yet. Tag items with fintv-commercial and click Sync Jellyfin Library.');
+            await loadSearchPlaylists();
         } catch (err) {
             reportApiError(err, 'Could not load commercials.');
+        }
+    }
+
+    async function loadSearchPlaylists() {
+        const listEl = $('cb-playlist-list');
+        if (!listEl) {
+            return;
+        }
+
+        try {
+            commercialSearchPlaylists = await api('/commercials/search-playlists') || [];
+            if (!commercialSearchPlaylists.length) {
+                selectedSearchPlaylistId = null;
+                listEl.innerHTML = '<div class="empty-state">No search playlists yet. Add a name and query, then Add &amp; Pull.</div>';
+                if ($('cb-playlist-items')) $('cb-playlist-items').innerHTML = '';
+                return;
+            }
+
+            if (!selectedSearchPlaylistId || !commercialSearchPlaylists.some((p) => p.id === selectedSearchPlaylistId)) {
+                selectedSearchPlaylistId = commercialSearchPlaylists[0].id;
+            }
+
+            listEl.innerHTML = `<table class="data-table">
+                <thead><tr><th>Name</th><th>Search</th><th>Spots</th><th>Last pull</th><th></th></tr></thead>
+                <tbody>${commercialSearchPlaylists.map((p) => {
+                    const selected = p.id === selectedSearchPlaylistId ? ' class="selected"' : '';
+                    const synced = p.lastSyncedAt ? new Date(p.lastSyncedAt).toLocaleString() : 'never';
+                    const err = p.lastError ? ` title="${escapeHtml(p.lastError)}"` : '';
+                    return `<tr data-playlist-id="${escapeHtml(p.id)}"${selected}${err}>
+                        <td>${escapeHtml(p.name)}</td>
+                        <td>${escapeHtml(p.query)}</td>
+                        <td>${p.itemCount ?? p.lastMatchedCount ?? 0}</td>
+                        <td>${escapeHtml(p.lastError ? 'error' : synced)}</td>
+                        <td>
+                            <button type="button" class="emby-button btn-pull-cb-playlist" data-id="${escapeHtml(p.id)}">Pull</button>
+                            <button type="button" class="emby-button btn-delete-cb-playlist" data-id="${escapeHtml(p.id)}">Delete</button>
+                        </td>
+                    </tr>`;
+                }).join('')}</tbody></table>`;
+
+            listEl.querySelectorAll('tbody tr').forEach((row) => {
+                row.onclick = (event) => {
+                    if (event.target.closest('button')) {
+                        return;
+                    }
+                    selectedSearchPlaylistId = row.dataset.playlistId;
+                    listEl.querySelectorAll('tbody tr').forEach((r) => r.classList.toggle('selected', r.dataset.playlistId === selectedSearchPlaylistId));
+                    renderSearchPlaylistItems();
+                };
+            });
+            listEl.querySelectorAll('.btn-pull-cb-playlist').forEach((btn) => {
+                btn.onclick = (event) => {
+                    event.stopPropagation();
+                    pullSearchPlaylist(btn.dataset.id);
+                };
+            });
+            listEl.querySelectorAll('.btn-delete-cb-playlist').forEach((btn) => {
+                btn.onclick = (event) => {
+                    event.stopPropagation();
+                    deleteSearchPlaylist(btn.dataset.id);
+                };
+            });
+            renderSearchPlaylistItems();
+        } catch (err) {
+            reportApiError(err, 'Could not load search playlists.');
+        }
+    }
+
+    function renderSearchPlaylistItems() {
+        const el = $('cb-playlist-items');
+        if (!el) {
+            return;
+        }
+        const playlist = commercialSearchPlaylists.find((p) => p.id === selectedSearchPlaylistId);
+        if (!playlist) {
+            el.innerHTML = '';
+            return;
+        }
+        const items = playlist.items || [];
+        if (!items.length) {
+            el.innerHTML = `<div class="empty-state">No spots in “${escapeHtml(playlist.name)}” yet. Click Pull.</div>`;
+            return;
+        }
+        el.innerHTML = `<table class="data-table">
+            <thead><tr><th>${escapeHtml(playlist.name)}</th><th>Brand</th><th>Year</th><th>Duration</th></tr></thead>
+            <tbody>${items.map((c) => {
+                const title = c.youtubeUrl
+                    ? `<a href="${escapeHtml(c.youtubeUrl)}" target="_blank" rel="noopener">${escapeHtml(c.title)}</a>`
+                    : escapeHtml(c.title);
+                return `<tr>
+                    <td>${title}</td>
+                    <td>${escapeHtml(c.brand || '')}</td>
+                    <td>${escapeHtml(String(c.year ?? ''))}</td>
+                    <td>${c.durationSeconds ?? 0}s</td>
+                </tr>`;
+            }).join('')}</tbody></table>`;
+    }
+
+    async function addSearchPlaylist() {
+        const name = ($('cb-playlist-name')?.value || '').trim();
+        const query = ($('cb-playlist-query')?.value || '').trim();
+        const maxResults = Number($('cb-playlist-max')?.value || '50');
+        if (!name || !query) {
+            toast('Name and search query are required.', 'error');
+            return;
+        }
+
+        const btn = $('btn-add-cb-playlist');
+        if (btn) btn.disabled = true;
+        try {
+            const playlist = await api('/commercials/search-playlists', {
+                method: 'POST',
+                body: { name, query, maxResults }
+            });
+            if ($('cb-playlist-name')) $('cb-playlist-name').value = '';
+            if ($('cb-playlist-query')) $('cb-playlist-query').value = '';
+            selectedSearchPlaylistId = playlist.id;
+            toast(`Pulled ${playlist.itemCount ?? 0} spots into “${playlist.name}”.`, 'success');
+            await loadCommercials();
+        } catch (err) {
+            toast(err.message, 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    async function pullSearchPlaylist(id) {
+        try {
+            toast('Pulling CommercialBrainz search…');
+            const playlist = await api('/commercials/search-playlists/' + id + '/pull', { method: 'POST' });
+            selectedSearchPlaylistId = playlist.id;
+            toast(`Pulled ${playlist.itemCount ?? 0} spots into “${playlist.name}”.`, 'success');
+            await loadCommercials();
+        } catch (err) {
+            toast(err.message, 'error');
+        }
+    }
+
+    async function deleteSearchPlaylist(id) {
+        if (!confirm('Delete this search playlist? Synced commercials stay in the library.')) {
+            return;
+        }
+        try {
+            await api('/commercials/search-playlists/' + id, { method: 'DELETE' });
+            if (selectedSearchPlaylistId === id) {
+                selectedSearchPlaylistId = null;
+            }
+            toast('Search playlist deleted.', 'success');
+            await loadSearchPlaylists();
+        } catch (err) {
+            toast(err.message, 'error');
+        }
+    }
+
+    async function loadCommercialBrainz() {
+        await loadBrainzSettings();
+        const previewEl = $('brainz-preview');
+        if (previewEl && previewEl.dataset.loaded !== '1') {
+            previewEl.dataset.loaded = '1';
+            try {
+                await previewBrainz({ skipSave: true, silent: true });
+            } catch (previewErr) {
+                previewEl.dataset.loaded = '';
+                previewEl.innerHTML = `<div class="empty-state">${escapeHtml(previewErr.message || 'Could not load commercial preview.')}</div>`;
+            }
         }
     }
 
@@ -2190,15 +2717,6 @@
                 btn.textContent = originalLabel || 'Create Missing Channels';
             }
         }
-    }
-
-    function applySetupData(data) {
-        $('setup-m3u').textContent = data.m3u || '';
-        $('setup-epg').textContent = data.epg || '';
-        $('setup-steps').innerHTML = (data.instructions || []).map((i) => `<li>${escapeHtml(i)}</li>`).join('');
-        if ($('setup-m3u-test')) $('setup-m3u-test').href = data.m3u || '#';
-        if ($('setup-epg-test')) $('setup-epg-test').href = data.epg || '#';
-        if ($('setup-base-url')) $('setup-base-url').textContent = data.baseUrl || '';
     }
 
     function updateEbsLibraryFieldVisibility() {
@@ -3183,10 +3701,18 @@
     function renderWeatherStatus(status) {
         const el = $('weather-renderer-status');
         if (!el) return;
-        const ws4 = status?.ws4kpRunning ? 'WS4000 renderer running on loopback' : 'WS4000 renderer idle (starts on first tune)';
-        const ws3 = status?.ws3kpRunning ? 'WS3000 renderer running on loopback' : 'WS3000 renderer idle (starts on first tune)';
+        const variant = status?.weatherStarVariant === 'ws3kp' ? 'ws3kp' : 'ws4kp';
+        const running = variant === 'ws3kp' ? !!status?.ws3kpRunning : !!status?.ws4kpRunning;
+        const label = variant === 'ws3kp' ? 'WeatherStar 3000' : 'WeatherStar 4000';
+        const state = running
+            ? label + ' renderer running on loopback'
+            : label + ' renderer idle (starts on first tune)';
         const chrome = status?.chromium ? 'Chromium available for native frame capture' : 'Chromium missing — NOAA overlay fallback will be used';
-        el.innerHTML = `<div>${escapeHtml(ws4)}</div><div>${escapeHtml(ws3)}</div><div class="meta">${escapeHtml(chrome)} · not exposed as a public website</div>`;
+        el.innerHTML = `<div>${escapeHtml(state)}</div><div class="meta">${escapeHtml(chrome)} · not exposed as a public website</div>`;
+        const variantSelect = $('weather-star-variant');
+        if (variantSelect) {
+            variantSelect.value = variant;
+        }
         const select = $('weather-music-library');
         if (select && Array.isArray(status?.musicLibraries)) {
             const current = status.weatherMusicLibraryId || '';
@@ -3194,12 +3720,121 @@
                 status.musicLibraries.map((lib) => `<option value="${escapeHtml(lib.id)}" ${lib.id === current ? 'selected' : ''}>${escapeHtml(lib.name)}</option>`).join('');
             if (current) select.value = current;
         }
-        if ($('weather-permalink-query') && status?.weatherStarPermalinkQuery) {
-            $('weather-permalink-query').value = status.weatherStarPermalinkQuery;
+        if ($('weather-default-zip')) {
+            $('weather-default-zip').value = extractWeatherZip(status?.weatherDefaultLocationQuery) || '';
         }
+        renderWeatherZipList(status?.weatherChannels || []);
+        applyWeatherQueryToForm(status?.weatherStarPermalinkQuery || '');
         if ($('weather-auto-wide-169')) {
             $('weather-auto-wide-169').checked = status?.weatherStarAutoWideForSixteenNine !== false;
         }
+    }
+
+    const WEATHER_SCREEN_KEYS = [
+        'hazards',
+        'current-weather',
+        'latest-observations',
+        'hourly',
+        'hourly-graph',
+        'travel',
+        'regional-forecast',
+        'local-forecast',
+        'extended-forecast',
+        'almanac',
+        'spc-outlook',
+        'radar'
+    ];
+
+    function extractWeatherZip(value) {
+        const match = String(value || '').match(/\b(\d{5})(?:-\d{4})?\b/);
+        return match ? match[1] : '';
+    }
+
+    function readWeatherZip(value, label) {
+        const zip = extractWeatherZip(value) || String(value || '').trim();
+        if (!/^\d{5}$/.test(zip)) {
+            throw new Error((label || 'ZIP code') + ' must be a 5-digit US ZIP.');
+        }
+        return zip;
+    }
+
+    function weatherQueryFlag(params, key, fallback) {
+        const raw = params.get(key);
+        if (raw == null || raw === '') {
+            return fallback;
+        }
+        return raw !== 'false' && raw !== '0';
+    }
+
+    function applyWeatherQueryToForm(query) {
+        const params = new URLSearchParams(String(query || '').replace(/^\?/, ''));
+        WEATHER_SCREEN_KEYS.forEach((key) => {
+            const el = $('wx-' + key);
+            if (el) {
+                el.checked = weatherQueryFlag(params, key, true);
+            }
+        });
+        if ($('wx-stickyKiosk')) {
+            $('wx-stickyKiosk').checked = weatherQueryFlag(params, 'stickyKiosk', true);
+        }
+        if ($('wx-customTextEnable')) {
+            $('wx-customTextEnable').checked = weatherQueryFlag(params, 'customTextEnable', false);
+        }
+        if ($('wx-scanLines')) {
+            $('wx-scanLines').checked = weatherQueryFlag(params, 'scanLines', false);
+        }
+        if ($('wx-customText')) {
+            $('wx-customText').value = params.get('customText') || '';
+        }
+        if ($('wx-units')) {
+            $('wx-units').value = params.get('units') || 'us';
+        }
+        if ($('wx-viewMode')) {
+            $('wx-viewMode').value = params.get('viewMode') || 'standard';
+        }
+        if ($('wx-speed')) {
+            const speed = Number(params.get('speed') || '1').toFixed(2);
+            $('wx-speed').value = ['0.50', '0.75', '1.00', '1.25', '1.50'].includes(speed) ? speed : '1.00';
+        }
+        if ($('wx-mediaVolume')) {
+            $('wx-mediaVolume').value = params.get('mediaVolume') || '0.75';
+        }
+    }
+
+    function serializeWeatherQueryFromForm() {
+        const params = new URLSearchParams();
+        WEATHER_SCREEN_KEYS.forEach((key) => {
+            params.set(key, $('wx-' + key)?.checked ? 'true' : 'false');
+        });
+        params.set('stickyKiosk', $('wx-stickyKiosk')?.checked ? 'true' : 'false');
+        params.set('customTextEnable', $('wx-customTextEnable')?.checked ? 'true' : 'false');
+        params.set('speed', $('wx-speed')?.value || '1.00');
+        params.set('viewMode', $('wx-viewMode')?.value || 'standard');
+        params.set('units', $('wx-units')?.value || 'us');
+        params.set('customText', $('wx-customText')?.value.trim() || '');
+        params.set('mediaVolume', $('wx-mediaVolume')?.value || '0.75');
+        params.set('scanLines', $('wx-scanLines')?.checked ? 'true' : 'false');
+        return params.toString();
+    }
+
+    function renderWeatherZipList(rows) {
+        const el = $('weather-zip-list');
+        if (!el) {
+            return;
+        }
+        if (!rows.length) {
+            el.innerHTML = '<p class="hint">No weather channels yet. Apply a WeatherStar preset or create a Weather channel, then set its ZIP here.</p>';
+            return;
+        }
+        el.innerHTML = rows.map((ch) => {
+            const zip = extractWeatherZip(ch.zip || ch.weatherLocationQuery);
+            return '<div class="weather-zip-row">'
+                + '<div class="wx-channel-label">' + escapeHtml((ch.number || '') + ' · ' + (ch.name || 'Weather')) + '</div>'
+                + '<label class="field"><span>ZIP code</span>'
+                + '<input class="emby-input weather-channel-zip" data-channel-id="' + escapeHtml(ch.id)
+                + '" inputmode="numeric" maxlength="10" placeholder="50317" value="' + escapeHtml(zip) + '">'
+                + '</label></div>';
+        }).join('');
     }
 
     async function loadWeather() {
@@ -3215,50 +3850,41 @@
         try {
             const data = await api('/weather/renderer/' + variant + '/start', { method: 'POST', body: '{}' });
             renderWeatherStatus(data);
-            toast(variant + ' renderer started.', 'success');
+            toast((variant === 'ws3kp' ? 'WeatherStar 3000' : 'WeatherStar 4000') + ' is now the active renderer.', 'success');
         } catch (err) {
             reportApiError(err, 'Could not start weather renderer.');
         }
     }
 
     async function saveWeatherSettings() {
-        const weatherStarPermalinkQuery = $('weather-permalink-query')?.value.trim() || '';
-        const weatherStarFullPermalink = $('weather-full-permalink')?.value.trim() || '';
         const musicSelect = $('weather-music-library');
         const selected = musicSelect?.selectedOptions?.[0];
         try {
+            const defaultRaw = $('weather-default-zip')?.value.trim();
+            const defaultZip = defaultRaw ? readWeatherZip(defaultRaw, 'Default ZIP code') : null;
+            const channelZips = Array.from(qa('.weather-channel-zip')).map((input) => ({
+                id: input.dataset.channelId,
+                zip: readWeatherZip(input.value, 'Channel ZIP code')
+            }));
             await api('/weather/settings', {
                 method: 'PUT',
                 body: JSON.stringify({
-                    weatherStarPermalinkQuery: weatherStarPermalinkQuery || null,
-                    weatherStarFullPermalink: weatherStarFullPermalink || null,
+                    weatherStarPermalinkQuery: serializeWeatherQueryFromForm(),
                     weatherStarAutoWideForSixteenNine: !!$('weather-auto-wide-169')?.checked,
+                    weatherStarVariant: $('weather-star-variant')?.value || 'ws4kp',
                     weatherMusicLibraryId: musicSelect?.value || '',
-                    weatherMusicLibraryName: selected && selected.value ? selected.textContent : ''
+                    weatherMusicLibraryName: selected && selected.value ? selected.textContent : '',
+                    defaultZip,
+                    channels: channelZips
                 })
             });
             toast('Weather settings saved.', 'success');
             await loadWeather();
-        } catch (err) {
-            toast(err.message, 'error');
-        }
-    }
-
-    function importWeatherPermalink() {
-        const permalink = $('weather-full-permalink')?.value.trim();
-        if (!permalink) {
-            toast('Paste a full WeatherStar permalink first.', 'error');
-            return;
-        }
-
-        try {
-            const split = splitWeatherPermalink(permalink);
-            if ($('weather-permalink-query')) {
-                $('weather-permalink-query').value = split.query;
+            if (channels.length) {
+                await loadChannels();
             }
-            toast('Permalink imported into display settings.', 'success');
         } catch (err) {
-            toast(err.message, 'error');
+            toast(err.message || 'Could not save weather settings.', 'error');
         }
     }
 
@@ -3437,6 +4063,9 @@
             if ($('general-playout-days')) {
                 $('general-playout-days').value = String(settings.playoutDaysToBuild ?? 14);
             }
+            if ($('general-api-key')) {
+                $('general-api-key').value = settings.apiKey || '';
+            }
         } catch (err) {
             reportApiError(err, 'Could not load general settings.');
         }
@@ -3454,7 +4083,8 @@
                 body: JSON.stringify({
                     debugLogging: !!$('general-debug-logging')?.checked,
                     scheduleTimeZone: $('general-schedule-tz')?.value || 'America/New_York',
-                    playoutDaysToBuild: Number($('general-playout-days')?.value || '14')
+                    playoutDaysToBuild: Number($('general-playout-days')?.value || '14'),
+                    apiKey: ($('general-api-key')?.value || '').trim() || null
                 })
             });
             toast('General settings saved.', 'success');
@@ -3464,37 +4094,40 @@
         }
     }
 
-    async function loadSetup() {
-        try {
-            const data = await api('/setup/urls');
-            applySetupData(data);
-            try {
-                const settings = await api('/setup/settings');
-                if ($('setup-public-base')) $('setup-public-base').value = settings.publicBaseUrl || '';
-            } catch (settingsErr) {
-                console.warn('Could not load setup settings', settingsErr);
-            }
-        } catch (err) {
-            applySetupData({ m3u: '', epg: '', instructions: [] });
-            toast('Failed to load Live TV URLs: ' + err.message, 'error');
+    async function generatePluginApiKey() {
+        if (!confirm('Generate a new API key? The Jellyfin plugin will stop linking until you paste the new key.')) {
+            return;
         }
-    }
 
-    async function saveSetupSettings() {
-        const publicBaseUrl = $('setup-public-base').value.trim();
         try {
-            const data = await api('/setup/settings', {
+            const saved = await api('/general/settings', {
                 method: 'PUT',
                 body: JSON.stringify({
-                    publicBaseUrl: publicBaseUrl || null
+                    debugLogging: !!$('general-debug-logging')?.checked,
+                    scheduleTimeZone: $('general-schedule-tz')?.value || 'America/New_York',
+                    playoutDaysToBuild: Number($('general-playout-days')?.value || '14'),
+                    generateApiKey: true
                 })
             });
-            applySetupData(data);
-            if ($('setup-public-base')) $('setup-public-base').value = publicBaseUrl;
-            toast('Live TV URLs updated.', 'success');
+            if ($('general-api-key')) {
+                $('general-api-key').value = saved.apiKey || '';
+            }
+            toast('New plugin API key saved. Copy it into the Jellyfin plugin.', 'success');
         } catch (err) {
             toast(err.message, 'error');
         }
+    }
+
+    function copyPluginApiKey() {
+        const text = ($('general-api-key')?.value || '').trim();
+        if (!text) {
+            toast('No API key to copy.', 'error');
+            return;
+        }
+
+        navigator.clipboard.writeText(text).then(() => toast('API key copied.', 'success')).catch(() => {
+            window.prompt('Copy API key:', text);
+        });
     }
 
     function normalizeConfigPageRoot(node) {
@@ -3536,6 +4169,69 @@
         } catch (err) {
             reportApiError(err, 'Could not load FinTV lists.');
         }
+    }
+
+    function selectedLibraryIds(containerId) {
+        const el = $(containerId);
+        if (!el) {
+            return [];
+        }
+
+        return Array.from(el.querySelectorAll('input[type="checkbox"]:checked'))
+            .map((input) => input.dataset.libId)
+            .filter(Boolean);
+    }
+
+    function renderJellyfinLibraryGroup(containerId, libraries, selectedIds, group) {
+        const el = $(containerId);
+        if (!el) {
+            return;
+        }
+
+        const matching = (libraries || []).filter((lib) => (lib.groups || []).includes(group));
+        if (!matching.length) {
+            el.innerHTML = '<div class="empty-state">No matching libraries in the synced catalog yet.</div>';
+            return;
+        }
+
+        const selected = new Set((selectedIds || []).map(String));
+        el.innerHTML = matching.map((lib) => {
+            const count = lib.itemCount || 0;
+            const checked = selected.has(String(lib.id)) ? ' checked' : '';
+            return `<label class="field checkbox-field">
+                <input type="checkbox" data-lib-id="${escapeHtml(lib.id)}"${checked}>
+                <span class="fintv-check-box" aria-hidden="true"></span>
+                <span>${escapeHtml(lib.name)} <span class="library-pick-meta">${count} item${count === 1 ? '' : 's'}</span></span>
+            </label>`;
+        }).join('');
+    }
+
+    async function loadJellyfinLibraries() {
+        try {
+            const data = await api('/catalog/libraries') || {};
+            const libraries = data.libraries || [];
+            renderJellyfinLibraryGroup('jf-lib-tv', libraries, data.tvLibraryIds, 'tv');
+            renderJellyfinLibraryGroup('jf-lib-movies', libraries, data.movieLibraryIds, 'movies');
+            renderJellyfinLibraryGroup('jf-lib-music', libraries, data.musicLibraryIds, 'music');
+            renderJellyfinLibraryGroup('jf-lib-musicvideos', libraries, data.musicVideoLibraryIds, 'musicvideos');
+            decorateCheckboxes();
+        } catch (err) {
+            reportApiError(err, 'Could not load Jellyfin libraries.');
+        }
+    }
+
+    async function saveJellyfinLibraries() {
+        await api('/catalog/libraries', {
+            method: 'PUT',
+            body: JSON.stringify({
+                tvLibraryIds: selectedLibraryIds('jf-lib-tv'),
+                movieLibraryIds: selectedLibraryIds('jf-lib-movies'),
+                musicLibraryIds: selectedLibraryIds('jf-lib-music'),
+                musicVideoLibraryIds: selectedLibraryIds('jf-lib-musicvideos')
+            })
+        });
+        toast('Jellyfin libraries saved.', 'success');
+        await loadJellyfinLibraries();
     }
 
     function renderListsTable() {
@@ -4158,15 +4854,16 @@
         presets: '/presets',
         lineups: '/lineups',
         list: '/lists',
+        jellyfin: '/jellyfin-library',
         special: '/special',
         commercials: '/commercials',
+        commercialbrainz: '/commercialbrainz',
         logos: '/logos',
         ebs: '/ebs',
         ai: '/ai',
         weather: '/weather',
         news: '/news',
         general: '/general',
-        setup: '/setup',
         tasks: '/tasks'
     };
 
@@ -4176,15 +4873,16 @@
         presets: 'Presets',
         lineups: 'Lineups',
         list: 'Lists',
+        jellyfin: 'Jellyfin Library',
         special: 'Special Presentation',
         commercials: 'Commercials',
+        commercialbrainz: 'CommercialBrainz',
         logos: 'Logo Sets',
         ebs: 'EBS',
         ai: 'AI',
         weather: 'Weather',
         news: 'News',
         general: 'General',
-        setup: 'Live TV Setup',
         tasks: 'Tasks'
     };
 
@@ -4194,15 +4892,16 @@
         presets: 'Create the Binarygeek119 ready-made lineup',
         lineups: 'Edit 24-hour schedules and playout',
         list: 'Register Jellyfin playlists as FinTV lists',
+        jellyfin: 'Choose which Jellyfin libraries to sync from',
         special: 'Recurring blocks that override the normal lineup',
-        commercials: 'Jellyfin and CommercialBrainz ad pools',
+        commercials: 'Jellyfin commercial library and blackframe scan',
+        commercialbrainz: 'YouTube commercial pool from CommercialBrainz',
         logos: 'Channel bugs and logo sets',
         ebs: 'Off-air Emergency Broadcast System',
         ai: 'AI lineup generation and tagging',
         weather: 'WeatherStar live channels',
         news: 'Live RSS news channel',
         general: 'Server-wide FinTV settings',
-        setup: 'Jellyfin Live TV tuner and guide URLs',
         tasks: 'Rebuild playouts and maintenance'
     };
 
@@ -4220,6 +4919,10 @@
             return 'channels';
         }
 
+        if (path === '/setup') {
+            return 'general';
+        }
+
         for (const name of Object.keys(TAB_PATHS)) {
             if (TAB_PATHS[name] === path) {
                 return name;
@@ -4228,6 +4931,10 @@
 
         if (path === '/list') {
             return 'list';
+        }
+
+        if (path === '/jellyfin' || path === '/library') {
+            return 'jellyfin';
         }
 
         return 'channels';
@@ -4257,20 +4964,27 @@
         tabRoutesBound = true;
         document.addEventListener('click', onTabLinkClick);
         window.addEventListener('popstate', () => {
+            const editorId = channelEditorIdFromPath(location.pathname);
+            if (editorId) {
+                openDeepChannelEditor(editorId, { fromRoute: true }).catch((err) => reportApiError(err, 'Could not open channel editor.'));
+                return;
+            }
+
+            closeDeepChannelEditor({ skipHistory: true });
             switchTab(tabFromPath(location.pathname), { skipHistory: true });
         });
     }
 
     function applyTabFromLocation() {
         const path = normalizePathname(location.pathname);
-        if (path === '/login') {
+        if (path === '/login' || channelEditorIdFromPath(path)) {
             return;
         }
 
         const tab = tabFromPath(path);
         switchTab(tab, { skipHistory: true });
         const app = document.getElementById('app-shell');
-        if (app && !app.classList.contains('hidden') && (path === '/' || path === '/index.html')) {
+        if (app && !app.classList.contains('hidden') && (path === '/' || path === '/index.html' || path === '/setup')) {
             history.replaceState({ tab }, '', TAB_PATHS[tab]);
         }
     }
@@ -4285,6 +4999,10 @@
             return;
         }
 
+        if (!options.keepEditor) {
+            closeDeepChannelEditor({ skipHistory: true, stay: true });
+        }
+
         qa('.fintv-tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
         document.querySelectorAll('.tab-panel').forEach((p) => {
             const on = p.id === 'tab-' + name;
@@ -4296,7 +5014,6 @@
         stopGuideClock();
         if (name === 'channels') startOnAirPolling();
         if (name === 'guide') loadGuide();
-        if (name === 'setup') loadSetup();
         if (name === 'general') loadGeneral();
         if (name === 'ebs') loadEbs();
         if (name === 'ai') loadAi();
@@ -4305,8 +5022,10 @@
         if (name === 'presets') loadPresets();
         if (name === 'lineups') loadLineups();
         if (name === 'list') loadLists();
+        if (name === 'jellyfin') loadJellyfinLibraries();
         if (name === 'special') loadSpecialPresentations();
         if (name === 'commercials') loadCommercials();
+        if (name === 'commercialbrainz') loadCommercialBrainz();
         if (name === 'logos') loadLogos();
 
         const path = TAB_PATHS[name];
@@ -4321,7 +5040,8 @@
     }
 
     function copyText(elementId) {
-        const text = $(elementId).textContent;
+        const el = $(elementId);
+        const text = (el && 'value' in el && el.value) ? el.value : (el?.textContent || '');
         navigator.clipboard.writeText(text).then(() => toast('Copied to clipboard.', 'success')).catch(() => {
             window.prompt('Copy URL:', text);
         });
@@ -4395,12 +5115,23 @@
         click('btn-close-channel', () => showChannelForm(false));
         click('btn-cancel-channel', () => showChannelForm(false));
         click('btn-delete-channel', () => deleteChannel(editingChannelId));
+        click('btn-deep-ch-back', () => {
+            const openedAsWindow = !!(window.opener && !window.opener.closed);
+            closeDeepChannelEditor();
+            if (!openedAsWindow) {
+                switchTab('channels');
+            }
+        });
+        click('btn-deep-ch-save', () => saveDeepChannel().catch((err) => reportApiError(err, 'Could not save channel.')));
+        click('btn-deep-ch-add-playlist', addDeepChannelPlaylist);
         const channelForm = $('channel-form');
         if (channelForm) {
             channelForm.onsubmit = saveChannel;
         }
         change('ch-content-type', toggleWeatherFields);
+        change('deep-ch-content-type', toggleWeatherFields);
         change('ch-logo-set', () => populateLogoSelectors({ logoSetId: $('ch-logo-set').value, logoFileName: '' }));
+        change('deep-ch-logo-set', () => populateLogoSelectors({ logoSetId: $('deep-ch-logo-set').value, logoFileName: '' }, 'deep-ch'));
         const channelFilterEl = $('channel-filter');
         if (channelFilterEl) {
             channelFilterEl.oninput = (e) => { channelFilter = e.target.value.trim(); renderChannelsList(); };
@@ -4412,6 +5143,7 @@
         click('btn-preview-lineup', previewLineup);
         click('btn-add-override', openOverrideForm);
         click('btn-add-list', () => openListForm().catch((e) => toast(e.message, 'error')));
+        click('btn-save-jellyfin-libraries', () => saveJellyfinLibraries().catch((e) => toast(e.message, 'error')));
         click('btn-add-special', () => openSpecialPresentationForm().catch((e) => toast(e.message, 'error')));
         change('special-channel-select', loadSpecialPresentations);
 
@@ -4421,6 +5153,7 @@
         click('btn-scan-blackframes', () => api('/commercials/scan-blackframes', { method: 'POST' })
             .then(() => { toast('Blackframe scan started.', 'success'); return loadCommercials(); })
             .catch((e) => toast(e.message, 'error')));
+        click('btn-add-cb-playlist', () => addSearchPlaylist().catch((e) => toast(e.message, 'error')));
         click('btn-save-brainz', () => saveBrainzSettings().catch((e) => toast(e.message, 'error')));
         click('btn-preview-brainz', () => previewBrainz().catch((e) => toast(e.message, 'error')));
         click('btn-sync-brainz', () => syncBrainz().catch((e) => toast(e.message, 'error')));
@@ -4437,8 +5170,9 @@
             .catch((e) => toast(e.message, 'error')));
 
         qa('.btn-copy').forEach((btn) => btn.onclick = () => copyText(btn.dataset.copyTarget));
-        click('btn-save-setup', saveSetupSettings);
         click('btn-save-general', saveGeneralSettings);
+        click('btn-copy-api-key', copyPluginApiKey);
+        click('btn-generate-api-key', () => generatePluginApiKey().catch((e) => toast(e.message, 'error')));
         click('btn-save-ebs', () => saveEbsSettings().catch((e) => toast(e.message, 'error')));
         click('btn-save-ai-settings', () => saveAiSettings().catch((e) => toast(e.message, 'error')));
         click('btn-test-ai', () => { void testAiConnection(); });
@@ -4459,9 +5193,8 @@
         click('btn-remove-ebs-usa', () => removeEbsSlate('usa'));
         click('btn-remove-ebs-international', () => removeEbsSlate('international'));
         click('btn-save-weather', saveWeatherSettings);
-        click('btn-import-weather-permalink', importWeatherPermalink);
-        click('btn-ws4kp-start', () => startWeatherRenderer('ws4kp').catch((e) => toast(e.message, 'error')));
-        click('btn-ws3kp-start', () => startWeatherRenderer('ws3kp').catch((e) => toast(e.message, 'error')));
+        click('btn-weather-renderer-start', () => startWeatherRenderer($('weather-star-variant')?.value || 'ws4kp').catch((e) => toast(e.message, 'error')));
+        change('weather-star-variant', () => startWeatherRenderer($('weather-star-variant')?.value || 'ws4kp').catch((e) => toast(e.message, 'error')));
         click('btn-save-news', () => saveNewsSettings().catch((e) => toast(e.message, 'error')));
         click('btn-save-news-feeds', () => saveNewsFeeds().catch((e) => toast(e.message, 'error')));
         click('btn-add-news-feed', addNewsFeedRow);
@@ -4485,7 +5218,6 @@
 
     async function refresh() {
         await loadChannels();
-        await loadSetup();
     }
 
     function init(page) {
@@ -4495,7 +5227,12 @@
 
         bindEvents();
         applyTabFromLocation();
-        return refresh().catch((err) => reportApiError(err, 'Could not load FinTV admin.'));
+        return refresh().then(() => {
+            const editorId = channelEditorIdFromPath(location.pathname);
+            if (editorId) {
+                return openDeepChannelEditor(editorId, { fromRoute: true });
+            }
+        }).catch((err) => reportApiError(err, 'Could not load FinTV admin.'));
     }
 
     function resolveConfigPage(preferred) {
@@ -4529,7 +5266,7 @@
         return true;
     }
 
-    window.FinTV = { init, refresh, loadChannels, loadSetup, bootFinTvAdmin, switchTab, tabFromPath };
+    window.FinTV = { init, refresh, loadChannels, bootFinTvAdmin, switchTab, tabFromPath };
 
     document.addEventListener('DOMContentLoaded', function () {
         const page = document.getElementById('FinTVConfigPage');

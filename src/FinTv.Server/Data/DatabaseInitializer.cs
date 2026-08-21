@@ -23,6 +23,7 @@ public class DatabaseInitializer : IHostedService
         var db = scope.ServiceProvider.GetRequiredService<FinTvDbContext>();
         await db.Database.EnsureCreatedAsync(cancellationToken);
         await EnsureNewsColumnsAsync(db, cancellationToken);
+        await EnsureChannelColumnsAsync(db, cancellationToken);
 
         if (!await db.AppSettings.AnyAsync(cancellationToken))
         {
@@ -76,6 +77,20 @@ public class DatabaseInitializer : IHostedService
             {
                 _logger.LogDebug(ex, "News schema ensure skipped for {Sql}", sql);
             }
+        }
+    }
+
+    private async Task EnsureChannelColumnsAsync(FinTvDbContext db, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """ALTER TABLE "Channels" ADD COLUMN IF NOT EXISTS "CommercialSearchPlaylistIdsJson" text NULL""",
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Channel schema ensure skipped");
         }
     }
 }

@@ -91,6 +91,19 @@ public class CommercialBrainzClient
         return null;
     }
 
+    public async Task<List<CommercialBrainzSearchHit>> SearchAsync(
+        CommercialBrainzSettings settings,
+        string query,
+        string type,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        var baseUrl = NormalizeBaseUrl(settings.BaseUrl);
+        var url = $"{baseUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&type={Uri.EscapeDataString(type)}&limit={Math.Clamp(limit, 1, 100)}";
+        return await GetAsync<List<CommercialBrainzSearchHit>>(settings, url, cancellationToken)
+            ?? new List<CommercialBrainzSearchHit>();
+    }
+
     public async Task<CommercialBrainzAdvertiserPage> SearchAdvertisersAsync(
         CommercialBrainzSettings settings,
         string query,
@@ -437,4 +450,15 @@ public class CommercialBrainzAdvertiserPublic
     public Guid Sbid { get; set; }
 
     public string Name { get; set; } = string.Empty;
+}
+
+public class CommercialBrainzSearchHit
+{
+    public string Type { get; set; } = "video";
+
+    public Guid Sbid { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public string? Subtitle { get; set; }
 }

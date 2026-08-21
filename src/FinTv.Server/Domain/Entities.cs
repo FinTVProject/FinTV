@@ -47,6 +47,16 @@ public class Channel
     public string? AiPlayoutTemplateId { get; set; }
 
     [JsonIgnore]
+    public string? CommercialSearchPlaylistIdsJson { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public List<Guid> CommercialSearchPlaylistIds
+    {
+        get => ParseCommercialSearchPlaylistIds(CommercialSearchPlaylistIdsJson);
+        set => CommercialSearchPlaylistIdsJson = SerializeCommercialSearchPlaylistIds(value);
+    }
+
+    [JsonIgnore]
     public bool IsContinuousLive => ContentType is ChannelContentType.Weather or ChannelContentType.News;
 
     [JsonIgnore]
@@ -66,6 +76,37 @@ public class Channel
 
     [JsonIgnore]
     public ICollection<PlayoutHistoryEntry> History { get; set; } = new List<PlayoutHistoryEntry>();
+
+    public static List<Guid> ParseCommercialSearchPlaylistIds(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new List<Guid>();
+        }
+
+        try
+        {
+            return FinTvJson.Deserialize<List<Guid>>(json)?
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToList()
+                ?? new List<Guid>();
+        }
+        catch
+        {
+            return new List<Guid>();
+        }
+    }
+
+    public static string? SerializeCommercialSearchPlaylistIds(IEnumerable<Guid>? ids)
+    {
+        var list = ids?
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList()
+            ?? new List<Guid>();
+        return list.Count == 0 ? null : FinTvJson.Serialize(list);
+    }
 }
 
 public class LogoSet

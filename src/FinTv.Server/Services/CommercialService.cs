@@ -27,15 +27,20 @@ public class CommercialService
         DateTime contentEnd,
         CancellationToken cancellationToken)
     {
-        if (channel.CommercialPresetId is null || content.JellyfinItemId is null)
+        if (content.JellyfinItemId is null)
         {
             return;
         }
 
-        var preset = await _db.CommercialPresets
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == channel.CommercialPresetId, cancellationToken);
+        CommercialPreset? preset = null;
+        if (channel.CommercialPresetId is Guid presetId)
+        {
+            preset = await _db.CommercialPresets
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == presetId, cancellationToken);
+        }
 
+        preset ??= await _db.CommercialPresets.AsNoTracking().OrderBy(p => p.Name).FirstOrDefaultAsync(cancellationToken);
         if (preset is null)
         {
             return;
@@ -50,7 +55,7 @@ public class CommercialService
         var breakPoints = GetBreakPoints(item, preset, contentStart, contentEnd);
         foreach (var point in breakPoints)
         {
-            var commercials = await PickCommercialsAsync(preset.PostRollCount > 0 ? preset.PostRollCount : 1, cancellationToken);
+            var commercials = await PickCommercialsAsync(channel, preset.PostRollCount > 0 ? preset.PostRollCount : 1, cancellationToken);
             var cursor = point;
             foreach (var commercial in commercials)
             {
@@ -79,20 +84,48 @@ public class CommercialService
         }
     }
 
-    public async Task<List<Commercial>> PickCommercialsAsync(int count, CancellationToken cancellationToken)
+    public async Task<List<Commercial>> PickCommercialsAsync(Channel channel, int count, CancellationToken cancellationToken)
     {
         var config = FinTvRuntime.Current?.Configuration;
-        var poolMode = config?.CommercialBrainz?.PoolMode ?? CommercialPoolMode.Both;
-
+        var playlistIds = channel.CommercialSearchPlaylistIds;
         var query = _db.Commercials.AsNoTracking().AsQueryable();
-        query = poolMode switch
+        HashSet<string>? playlistSbids = null;
+
+        if (playlistIds.Count > 0)
         {
-            CommercialPoolMode.JellyfinOnly => query.Where(c => c.Source == CommercialSource.Jellyfin),
-            CommercialPoolMode.CommercialBrainzOnly => query.Where(c => c.Source == CommercialSource.CommercialBrainz),
-            _ => query
-        };
+            playlistSbids = (config?.CommercialSearchPlaylists ?? new List<Configuration.CommercialSearchPlaylist>())
+                .Where(playlist => playlistIds.Contains(playlist.Id))
+                .SelectMany(playlist => playlist.VideoSbids ?? new List<string>())
+                .Where(sbid => !string.IsNullOrWhiteSpace(sbid))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (playlistSbids.Count == 0)
+            {
+                return new List<Commercial>();
+            }
+
+            query = query.Where(c =>
+                c.Source == CommercialSource.CommercialBrainz
+                && c.CommercialBrainzVideoSbid != null);
+        }
+        else
+        {
+            var poolMode = config?.CommercialBrainz?.PoolMode ?? CommercialPoolMode.Both;
+            query = poolMode switch
+            {
+                CommercialPoolMode.JellyfinOnly => query.Where(c => c.Source == CommercialSource.Jellyfin),
+                CommercialPoolMode.CommercialBrainzOnly => query.Where(c => c.Source == CommercialSource.CommercialBrainz),
+                _ => query
+            };
+        }
 
         var all = await query.ToListAsync(cancellationToken);
+        if (playlistSbids is not null)
+        {
+            all = all
+                .Where(c => c.CommercialBrainzVideoSbid != null && playlistSbids.Contains(c.CommercialBrainzVideoSbid))
+                .ToList();
+        }
         if (all.Count == 0)
         {
             return new List<Commercial>();

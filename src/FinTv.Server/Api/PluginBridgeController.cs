@@ -1,4 +1,6 @@
 using System.Text.Json;
+using FinTv;
+using FinTv.Auth;
 using FinTv.Data;
 using FinTv.Domain;
 using FinTv.News;
@@ -88,6 +90,23 @@ public class PluginBridgeController : ControllerBase
         return Ok(new { count = request.Items.Count });
     }
 
+    /// <summary>
+    /// Library IDs the Jellyfin plugin should include when syncing catalog.
+    /// Empty lists mean sync every library of that type.
+    /// </summary>
+    [HttpGet("library-sync")]
+    public ActionResult<object> GetLibrarySync()
+    {
+        var settings = FinTvRuntime.Current?.Configuration.JellyfinLibraries ?? new Configuration.JellyfinLibrarySettings();
+        return Ok(new
+        {
+            tvLibraryIds = settings.TvLibraryIds,
+            movieLibraryIds = settings.MovieLibraryIds,
+            musicLibraryIds = settings.MusicLibraryIds,
+            musicVideoLibraryIds = settings.MusicVideoLibraryIds
+        });
+    }
+
     [HttpPatch("catalog/{itemId:guid}/chapters")]
     public async Task<IActionResult> PatchChapters(
         Guid itemId,
@@ -120,12 +139,10 @@ public class PluginBridgeController : ControllerBase
     public ActionResult<object> LiveTvUrls()
     {
         var baseUrl = FinTvRuntime.Current?.Configuration.PublicBaseUrl?.TrimEnd('/') ?? "http://FinTV-Server:8097";
-        var apiKey = Environment.GetEnvironmentVariable("FINTV_API_KEY");
-        var query = string.IsNullOrWhiteSpace(apiKey) ? string.Empty : "?apiKey=" + Uri.EscapeDataString(apiKey);
         return Ok(new
         {
-            m3u = $"{baseUrl}/iptv/channels.m3u{query}",
-            epg = $"{baseUrl}/iptv/epg.xml{query}"
+            m3u = PluginApiKey.AppendQuery($"{baseUrl}/iptv/channels.m3u"),
+            epg = PluginApiKey.AppendQuery($"{baseUrl}/iptv/epg.xml")
         });
     }
 }

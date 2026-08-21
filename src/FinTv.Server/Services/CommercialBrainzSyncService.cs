@@ -179,6 +179,208 @@ public class CommercialBrainzSyncService
     public Task<byte[]?> GetYouTubeThumbnailAsync(string? youtubeId, CancellationToken cancellationToken = default)
         => _client.GetYouTubeThumbnailAsync(youtubeId, cancellationToken);
 
+    public async Task<CommercialSearchPlaylist> PullSearchPlaylistAsync(
+        Guid playlistId,
+        CancellationToken cancellationToken = default)
+    {
+        var runtime = FinTvRuntime.Current ?? throw new InvalidOperationException("FinTV is not initialized.");
+        var playlist = runtime.Configuration.CommercialSearchPlaylists
+            .FirstOrDefault(p => p.Id == playlistId)
+            ?? throw new InvalidOperationException("Search playlist not found.");
+
+        var query = playlist.Query.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            throw new InvalidOperationException("Search playlist query is required.");
+        }
+
+        var settings = GetSettings();
+        var pullSettings = ForSearchPull(settings, playlist.MaxResults);
+        var limit = Math.Clamp(playlist.MaxResults, 1, 100);
+        var seen = new HashSet<Guid>();
+        var videos = new List<CommercialBrainzVideoSummary>();
+
+        try
+        {
+            foreach (var hit in await _client.SearchAsync(settings, query, "video", limit, cancellationToken))
+            {
+                if (hit.Sbid == Guid.Empty || !seen.Add(hit.Sbid))
+                {
+                    continue;
+                }
+
+                var detail = await _client.GetVideoAsync(settings, hit.Sbid, cancellationToken);
+                if (detail is not null)
+                {
+                    videos.Add(detail);
+                }
+            }
+
+            if (videos.Count < limit)
+            {
+                foreach (var hit in await _client.SearchAsync(settings, query, "advertiser", 25, cancellationToken))
+                {
+                    await foreach (var video in BrowseAllAsync(
+                        pullSettings,
+                        limit,
+                        seen,
+                        enrichDetails: true,
+                        advertiserSbid: hit.Sbid.ToString("D"),
+                        cancellationToken: cancellationToken))
+                    {
+                        videos.Add(video);
+                        if (videos.Count >= limit)
+                        {
+                            break;
+                        }
+                    }
+
+                    if (videos.Count >= limit)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (videos.Count < limit)
+            {
+                var advertisers = await _client.SearchAdvertisersAsync(settings, query, 0, 25, cancellationToken);
+                foreach (var advertiser in advertisers.Items)
+                {
+                    await foreach (var video in BrowseAllAsync(
+                        pullSettings,
+                        limit,
+                        seen,
+                        enrichDetails: true,
+                        advertiserSbid: advertiser.Sbid.ToString("D"),
+                        cancellationToken: cancellationToken))
+                    {
+                        videos.Add(video);
+                        if (videos.Count >= limit)
+                        {
+                            break;
+                        }
+                    }
+
+                    if (videos.Count >= limit)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<FinTvDbContext>();
+            var matchedSbids = new List<string>();
+
+            foreach (var video in videos)
+            {
+                if (!_filter.Matches(pullSettings, video, requireEnabled: false))
+                {
+                    continue;
+                }
+
+                var mapped = _filter.MapToCommercial(video);
+                if (string.IsNullOrWhiteSpace(mapped.CommercialBrainzVideoSbid))
+                {
+                    continue;
+                }
+
+                var existing = await db.Commercials.FirstOrDefaultAsync(
+                    c => c.CommercialBrainzVideoSbid == mapped.CommercialBrainzVideoSbid,
+                    cancellationToken);
+                if (existing is null)
+                {
+                    db.Commercials.Add(mapped);
+                }
+                else
+                {
+                    UpdateExisting(existing, mapped);
+                }
+
+                matchedSbids.Add(mapped.CommercialBrainzVideoSbid);
+                if (matchedSbids.Count >= limit)
+                {
+                    break;
+                }
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            playlist.VideoSbids = matchedSbids.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            playlist.LastMatchedCount = playlist.VideoSbids.Count;
+            playlist.LastSyncedAt = DateTime.UtcNow;
+            playlist.LastError = null;
+            runtime.SaveConfiguration();
+            return playlist;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            playlist.LastError = ex.Message;
+            runtime.SaveConfiguration();
+            throw;
+        }
+    }
+
+    public async Task<object> MapSearchPlaylistAsync(
+        CommercialSearchPlaylist playlist,
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<FinTvDbContext>();
+        var sbids = playlist.VideoSbids ?? new List<string>();
+        var items = sbids.Count == 0
+            ? new List<Commercial>()
+            : await db.Commercials.AsNoTracking()
+                .Where(c => c.CommercialBrainzVideoSbid != null && sbids.Contains(c.CommercialBrainzVideoSbid))
+                .OrderBy(c => c.Title)
+                .ToListAsync(cancellationToken);
+
+        return MapSearchPlaylist(playlist, items);
+    }
+
+    public static object MapSearchPlaylist(CommercialSearchPlaylist playlist, IReadOnlyList<Commercial>? items = null)
+    {
+        return new
+        {
+            id = playlist.Id,
+            name = playlist.Name,
+            query = playlist.Query,
+            maxResults = playlist.MaxResults,
+            lastSyncedAt = playlist.LastSyncedAt,
+            lastMatchedCount = playlist.LastMatchedCount,
+            lastError = playlist.LastError,
+            itemCount = items?.Count ?? playlist.VideoSbids.Count,
+            items = (items ?? Array.Empty<Commercial>()).Select(c => new
+            {
+                id = c.Id,
+                title = c.Title,
+                brand = c.Brand,
+                year = c.Year,
+                durationSeconds = (int)Math.Round(c.Duration.TotalSeconds),
+                youtubeUrl = c.YouTubeUrl
+            })
+        };
+    }
+
+    private static CommercialBrainzSettings ForSearchPull(CommercialBrainzSettings source, int maxResults)
+    {
+        return new CommercialBrainzSettings
+        {
+            Enabled = true,
+            BaseUrl = source.BaseUrl,
+            ApiToken = source.ApiToken,
+            MaxSyncResults = Math.Clamp(maxResults, 1, 100),
+            AllowSpoof = source.AllowSpoof,
+            AllowFake = source.AllowFake,
+            AllowReal = source.AllowReal,
+            AllowAiEnhanced = source.AllowAiEnhanced,
+            AllowLateNight = source.AllowLateNight,
+            AllowAdultRated = source.AllowAdultRated,
+            AllowBanned = source.AllowBanned
+        };
+    }
+
     private async IAsyncEnumerable<CommercialBrainzVideoSummary> EnumerateCandidatesAsync(
         CommercialBrainzSettings settings,
         bool enrichDetails,

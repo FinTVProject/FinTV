@@ -5,15 +5,16 @@
         presets: 'Presets',
         lineups: 'Lineups',
         list: 'Lists',
+        jellyfin: 'Jellyfin Library',
         special: 'Special Presentation',
         commercials: 'Commercials',
+        commercialbrainz: 'CommercialBrainz',
         logos: 'Logo Sets',
         ebs: 'EBS',
         ai: 'AI',
         weather: 'Weather',
         news: 'News',
         general: 'General',
-        setup: 'Live TV Setup',
         tasks: 'Tasks'
     };
 
@@ -23,15 +24,16 @@
         presets: 'Create the Binarygeek119 ready-made lineup',
         lineups: 'Edit 24-hour schedules and playout',
         list: 'Register Jellyfin playlists as FinTV lists',
+        jellyfin: 'Choose which Jellyfin libraries to sync from',
         special: 'Recurring blocks that override the normal lineup',
-        commercials: 'Jellyfin and CommercialBrainz ad pools',
+        commercials: 'Jellyfin commercial library and blackframe scan',
+        commercialbrainz: 'YouTube commercial pool from CommercialBrainz',
         logos: 'Channel bugs and logo sets',
         ebs: 'Off-air Emergency Broadcast System',
         ai: 'AI lineup generation and tagging',
         weather: 'WeatherStar live channels',
         news: 'Live RSS news channel',
         general: 'Server-wide FinTV settings',
-        setup: 'Jellyfin Live TV tuner and guide URLs',
         tasks: 'Rebuild playouts and maintenance'
     };
 
@@ -75,20 +77,20 @@
         return value;
     }
 
-    function syncDrawer(name) {
+    function syncDrawer(name, detail) {
         const nav = document.getElementById('drawer-nav');
         if (!nav) {
             return;
         }
 
         nav.querySelectorAll('a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
-        const title = titles[name];
+        const title = (detail && detail.title) || titles[name];
         if (title) {
             document.getElementById('page-title').textContent = title;
         }
         const subtitle = document.getElementById('page-subtitle');
-        if (subtitle && subtitles[name]) {
-            subtitle.textContent = subtitles[name];
+        if (subtitle) {
+            subtitle.textContent = (detail && detail.subtitle) || subtitles[name] || '';
         }
     }
 
@@ -164,7 +166,7 @@
     }
 
     function bindPathMappings() {
-        const general = document.getElementById('tab-general') || document.getElementById('tab-setup');
+        const general = document.getElementById('tab-general');
         if (!general || document.getElementById('path-map-card')) {
             return;
         }
@@ -219,7 +221,8 @@
                 const confirm = document.getElementById('login-pass-confirm').value;
                 const body = {
                     userName: document.getElementById('login-user').value,
-                    password
+                    password,
+                    rememberMe: !!document.getElementById('login-remember')?.checked
                 };
                 const err = document.getElementById('login-error');
                 try {
@@ -242,7 +245,7 @@
             window.addEventListener('fintv-auth-required', () => showLogin(false));
             window.addEventListener('fintv-tabchange', (e) => {
                 if (e.detail && e.detail.tab) {
-                    syncDrawer(e.detail.tab);
+                    syncDrawer(e.detail.tab, e.detail);
                 }
             });
         } catch (ex) {

@@ -1,3 +1,4 @@
+using FinTv.Auth;
 using FinTv.Configuration;
 using FinTv.Domain;
 using FinTv.Services;
@@ -149,11 +150,19 @@ public class SetupController : ControllerBase
     private object BuildUrlResponse()
     {
         var baseUrl = EpgService.GetPublicBaseUrl(Request, _appHost);
+        var m3u = $"{baseUrl}/iptv/channels.m3u";
+        var epg = $"{baseUrl}/iptv/epg.xml";
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            m3u = PluginApiKey.AppendQuery(m3u);
+            epg = PluginApiKey.AppendQuery(epg);
+        }
+
         return new
         {
             baseUrl,
-            m3u = $"{baseUrl}/iptv/channels.m3u",
-            epg = $"{baseUrl}/iptv/epg.xml",
+            m3u,
+            epg,
             instructions = new[]
             {
                 "Dashboard → Live TV → Add Tuner → M3U Tuner",

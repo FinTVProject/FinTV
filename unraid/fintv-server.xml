@@ -21,7 +21,6 @@
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
   <Config Name="TZ" Target="TZ" Default="America/Chicago" Mode="" Description="Timezone" Type="Variable" Display="always" Required="false" Mask="false">America/Chicago</Config>
   <Config Name="Jellyfin URL" Target="JELLYFIN_URL" Default="http://Jellyfin:8096" Mode="" Description="Jellyfin base URL on the shared Docker network" Type="Variable" Display="always" Required="false" Mask="false">http://Jellyfin:8096</Config>
-  <Config Name="FinTV API Key" Target="FINTV_API_KEY" Default="" Mode="" Description="Shared secret with the Jellyfin plugin and IPTV URLs" Type="Variable" Display="always" Required="true" Mask="true"></Config>
   <Config Name="Postgres Host" Target="POSTGRES_HOST" Default="fintv-postgres" Mode="" Description="PostgreSQL hostname on the Docker network" Type="Variable" Display="always" Required="true" Mask="false">fintv-postgres</Config>
   <Config Name="Postgres Port" Target="POSTGRES_PORT" Default="5432" Mode="" Description="PostgreSQL port" Type="Variable" Display="advanced" Required="false" Mask="false">5432</Config>
   <Config Name="Postgres Database" Target="POSTGRES_DB" Default="fintv" Mode="" Description="Database name" Type="Variable" Display="advanced" Required="false" Mask="false">fintv</Config>

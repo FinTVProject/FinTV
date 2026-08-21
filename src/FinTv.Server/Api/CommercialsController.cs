@@ -193,6 +193,83 @@ public class CommercialsController : ControllerBase
         return Ok(FinTvRuntime.Current?.Configuration.BlackframeTaskState);
     }
 
+    [HttpGet("search-playlists")]
+    public async Task<ActionResult<object>> GetSearchPlaylists(CancellationToken cancellationToken)
+    {
+        var playlists = FinTvRuntime.Current?.Configuration.CommercialSearchPlaylists ?? new List<CommercialSearchPlaylist>();
+        var mapped = new List<object>();
+        foreach (var playlist in playlists.OrderBy(p => p.Name))
+        {
+            mapped.Add(await _commercialBrainz.MapSearchPlaylistAsync(playlist, cancellationToken));
+        }
+
+        return Ok(mapped);
+    }
+
+    [HttpPost("search-playlists")]
+    public async Task<ActionResult<object>> CreateSearchPlaylist(
+        [FromBody] CommercialSearchPlaylistRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var runtime = FinTvRuntime.Current;
+        if (runtime is null)
+        {
+            return NotFound();
+        }
+
+        var name = request?.Name?.Trim();
+        var query = request?.Query?.Trim();
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(query))
+        {
+            return BadRequest(new { message = "Name and search query are required." });
+        }
+
+        var playlist = new CommercialSearchPlaylist
+        {
+            Name = name,
+            Query = query,
+            MaxResults = Math.Clamp(request?.MaxResults ?? 50, 1, 100)
+        };
+        runtime.Configuration.CommercialSearchPlaylists.Add(playlist);
+        runtime.SaveConfiguration();
+
+        var pulled = await _commercialBrainz.PullSearchPlaylistAsync(playlist.Id, cancellationToken);
+        return Ok(await _commercialBrainz.MapSearchPlaylistAsync(pulled, cancellationToken));
+    }
+
+    [HttpPost("search-playlists/{id:guid}/pull")]
+    public async Task<ActionResult<object>> PullSearchPlaylist(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var pulled = await _commercialBrainz.PullSearchPlaylistAsync(id, cancellationToken);
+            return Ok(await _commercialBrainz.MapSearchPlaylistAsync(pulled, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    [HttpDelete("search-playlists/{id:guid}")]
+    public IActionResult DeleteSearchPlaylist(Guid id)
+    {
+        var runtime = FinTvRuntime.Current;
+        if (runtime is null)
+        {
+            return NotFound();
+        }
+
+        var removed = runtime.Configuration.CommercialSearchPlaylists.RemoveAll(p => p.Id == id);
+        if (removed == 0)
+        {
+            return NotFound(new { message = "Search playlist not found." });
+        }
+
+        runtime.SaveConfiguration();
+        return NoContent();
+    }
+
     private static object MapBrainzSettings(CommercialBrainzSettings settings)
     {
         return new
@@ -282,4 +359,13 @@ public class CommercialBrainzSettingsRequest
     public bool AllowAdultRated { get; set; }
 
     public bool AllowBanned { get; set; }
+}
+
+public class CommercialSearchPlaylistRequest
+{
+    public string? Name { get; set; }
+
+    public string? Query { get; set; }
+
+    public int? MaxResults { get; set; }
 }

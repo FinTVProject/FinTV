@@ -10,7 +10,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-fintv}
       POSTGRES_USER: ${POSTGRES_USER:-fintv}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fintv}
-      FINTV_API_KEY: ${FINTV_API_KEY:-change-me}
       FINTV_CONFIG: /config
       JELLYFIN_URL: ${JELLYFIN_URL:-http://jellyfin:8096}
       TZ: ${TZ:-America/Chicago}

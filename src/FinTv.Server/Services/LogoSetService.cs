@@ -225,6 +225,14 @@ public class LogoSetService
             {
                 return match;
             }
+
+            var fileName = Path.GetFileName(relativePath);
+            match = set.Entries.FirstOrDefault(entry =>
+                entry.FileName.Equals(fileName, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                return match;
+            }
         }
 
         if (string.IsNullOrWhiteSpace(channelName))
@@ -400,33 +408,58 @@ public class LogoSetService
 
     internal static ChannelPresetDefinition? FindPresetForChannel(Channel channel)
     {
-        var byLegacy = ChannelPresets.All.FirstOrDefault(p => p.LegacyNumber == channel.Number);
-        if (byLegacy is not null)
-        {
-            return byLegacy;
-        }
-
-        var bySubchannel = ChannelPresets.All.FirstOrDefault(p => p.SubchannelNumber == channel.Number);
-        if (bySubchannel is not null)
-        {
-            return bySubchannel;
-        }
-
         var normalizedName = NormalizeLogoName(channel.Name);
-        if (string.IsNullOrWhiteSpace(normalizedName))
+        if (!string.IsNullOrWhiteSpace(normalizedName))
         {
-            return null;
+            var byName = ChannelPresets.All.FirstOrDefault(p => NormalizeLogoName(p.Name) == normalizedName);
+            if (byName is not null)
+            {
+                return byName;
+            }
         }
 
-        var exactName = ChannelPresets.All.FirstOrDefault(p => NormalizeLogoName(p.Name) == normalizedName);
-        if (exactName is not null)
+        var libraryTag = ChannelAiRules.ExtractLibraryTag(channel.FilterJson);
+        if (!string.IsNullOrWhiteSpace(libraryTag))
         {
-            return exactName;
+            var byTag = ChannelPresets.Find(libraryTag)
+                ?? ChannelPresets.All.FirstOrDefault(p =>
+                    p.LibraryTag.Equals(libraryTag, StringComparison.OrdinalIgnoreCase));
+            if (byTag is not null)
+            {
+                return byTag;
+            }
+        }
+
+        var byNumber = ChannelPresets.All
+            .Where(p => p.LegacyNumber == channel.Number || p.SubchannelNumber == channel.Number)
+            .ToList();
+        if (byNumber.Count == 1)
+        {
+            return byNumber[0];
+        }
+
+        if (byNumber.Count > 1)
+        {
+            if (channel.ContentType == ChannelContentType.Weather)
+            {
+                return byNumber.FirstOrDefault(p => p.IsWeatherChannel) ?? byNumber[0];
+            }
+
+            var bySubchannel = byNumber.FirstOrDefault(p => p.SubchannelNumber == channel.Number);
+            if (bySubchannel is not null)
+            {
+                return bySubchannel;
+            }
         }
 
         if (channel.ContentType == ChannelContentType.Weather)
         {
             return ChannelPresets.All.FirstOrDefault(p => p.IsWeatherChannel);
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            return null;
         }
 
         if (normalizedName.Contains("newsweather", StringComparison.Ordinal)

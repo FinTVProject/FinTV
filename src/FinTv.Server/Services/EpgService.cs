@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using FinTv.Auth;
 using FinTv.Data;
 using FinTv.Domain;
 using Microsoft.AspNetCore.Http;
@@ -312,13 +313,7 @@ public class EpgService
                 .Append("\",")
                 .AppendLine(channel.Name);
 
-            var streamUrl = $"{baseUrl.TrimEnd('/')}/iptv/stream/{channel.Id:N}";
-            var apiKey = Environment.GetEnvironmentVariable("FINTV_API_KEY");
-            if (!string.IsNullOrWhiteSpace(apiKey))
-            {
-                streamUrl += "?apiKey=" + Uri.EscapeDataString(apiKey);
-            }
-
+            var streamUrl = PluginApiKey.AppendQuery($"{baseUrl.TrimEnd('/')}/iptv/stream/{channel.Id:N}");
             sb.AppendLine(streamUrl);
         }
 

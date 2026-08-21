@@ -34,25 +34,21 @@ Image: `ghcr.io/fintvproject/fintv-server:latest` (built from this repo). Unraid
 
 ```bash
 cp .env.example .env
-# set FINTV_API_KEY, FINTV_MEDIA, and POSTGRES_* for your existing database
+# set FINTV_MEDIA and POSTGRES_* for your existing database
 docker compose up -d --build
 ```
 
 Then:
 
 1. Open `http://<host>:8097` and create the admin username and password on first launch
-2. Add path remaps under General (Jellyfin prefix → `/media` or your mount)
-3. Install the FinTV plugin, set Server URL + API key (`FINTV_API_KEY`), run **FinTV Catalog Sync**
-4. Join FinTV Server and Jellyfin to the **same Docker network** as your PostgreSQL instance
+2. Copy the plugin API key from **General** (created automatically on first boot)
+3. Add path remaps under General (Jellyfin prefix → `/media` or your mount)
+4. Install the FinTV plugin, set Server URL + API key, run **FinTV Catalog Sync**
+5. Join FinTV Server and Jellyfin to the **same Docker network** as your PostgreSQL instance
 
 Unraid: point `POSTGRES_HOST` at your existing Postgres container on a custom network with Jellyfin. Pass `/dev/dri` into the container for Intel VAAPI encode/decode (enabled by default as `FFMPEG_HWACCEL=vaapi`).
 
-## IPTV
-
-M3U: `http://FinTV-Server:8097/iptv/channels.m3u?apiKey=...`  
-XMLTV: `http://FinTV-Server:8097/iptv/epg.xml?apiKey=...`
-
-The plugin can register these automatically when **Auto-register Live TV** is enabled.
+The plugin registers the Live TV tuner and XMLTV guide automatically when you set the FinTV Server URL and API key.
 
 ## Weather and news
 

@@ -65,6 +65,8 @@ public class FinTvDbContext : DbContext
             entity.HasOne(e => e.LogoSet).WithMany().HasForeignKey(e => e.LogoSetId);
             entity.HasOne(e => e.CommercialPreset).WithMany(e => e.Channels).HasForeignKey(e => e.CommercialPresetId);
             entity.HasOne(e => e.DefaultLineup).WithOne(e => e.Channel!).HasForeignKey<Lineup>(e => e.ChannelId);
+            entity.Ignore(e => e.CommercialSearchPlaylistIds);
+            entity.Ignore(e => e.IsContinuousLive);
         });
 
         modelBuilder.Entity<Lineup>(entity =>

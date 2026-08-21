@@ -59,7 +59,7 @@ public class AuthController : ControllerBase
             PasswordHash = Services.PasswordHasher.Hash(request.Password)
         });
         await _db.SaveChangesAsync(cancellationToken);
-        await SignInAsync(userName);
+        await SignInAsync(userName, request.RememberMe);
         return Ok(new { authenticated = true, userName });
     }
 
@@ -75,7 +75,7 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid username or password." });
         }
 
-        await SignInAsync(user.UserName);
+        await SignInAsync(user.UserName, request.RememberMe);
         return Ok(new { authenticated = true, userName = user.UserName });
     }
 
@@ -106,7 +106,7 @@ public class AuthController : ControllerBase
         return Ok();
     }
 
-    private Task SignInAsync(string userName)
+    private Task SignInAsync(string userName, bool rememberMe)
     {
         var claims = new List<Claim>
         {
@@ -116,9 +116,13 @@ public class AuthController : ControllerBase
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var props = new AuthenticationProperties
         {
-            IsPersistent = true,
-            ExpiresUtc = DateTimeOffset.UtcNow.AddDays(14)
+            IsPersistent = rememberMe
         };
+        if (rememberMe)
+        {
+            props.ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30);
+        }
+
         return HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity),
@@ -131,6 +135,8 @@ public class LoginRequest
     public string? UserName { get; set; }
 
     public string? Password { get; set; }
+
+    public bool RememberMe { get; set; }
 }
 
 public class ChangePasswordRequest
@@ -143,12 +149,10 @@ public class ChangePasswordRequest
 public sealed class ApiKeyMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly string _apiKey;
 
-    public ApiKeyMiddleware(RequestDelegate next, IConfiguration configuration)
+    public ApiKeyMiddleware(RequestDelegate next)
     {
         _next = next;
-        _apiKey = configuration["FINTV_API_KEY"] ?? Environment.GetEnvironmentVariable("FINTV_API_KEY") ?? string.Empty;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -157,11 +161,11 @@ public sealed class ApiKeyMiddleware
         var needsApiKey = path.StartsWith("/iptv", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/plugin", StringComparison.OrdinalIgnoreCase);
 
-        if (needsApiKey && !string.IsNullOrWhiteSpace(_apiKey))
+        if (needsApiKey)
         {
             var provided = context.Request.Headers["X-Api-Key"].FirstOrDefault()
                 ?? context.Request.Query["apiKey"].FirstOrDefault();
-            if (!string.Equals(provided, _apiKey, StringComparison.Ordinal))
+            if (!PluginApiKey.Matches(provided))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 await context.Response.WriteAsJsonAsync(new { message = "Invalid API key." });

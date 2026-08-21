@@ -16,6 +16,11 @@
       <label class="field"><span>Username</span><input id="login-user" autocomplete="username" required></label>
       <label class="field"><span>Password</span><input id="login-pass" type="password" autocomplete="current-password" required></label>
       <label class="field hidden" id="login-pass-confirm-field"><span>Confirm password</span><input id="login-pass-confirm" type="password" autocomplete="new-password" minlength="8"></label>
+      <label class="field checkbox-field" id="login-remember-field">
+        <input id="login-remember" type="checkbox" checked>
+        <span class="fintv-check-box" aria-hidden="true"></span>
+        <span>Remember me</span>
+      </label>
       <p id="login-error" class="auth-error"></p>
       <button type="submit" class="raised button-submit" id="login-submit">Sign in</button>
     </form>
@@ -35,6 +40,95 @@
         <div id="topbar-user" class="topbar-user"></div>
       </header>
       <div id="FinTVConfigPage">
+        <div id="channel-deep-editor" class="channel-editor hidden" hidden>
+            <div class="channel-editor-toolbar">
+                <button type="button" id="btn-deep-ch-back" class="emby-button">Back</button>
+                <div class="channel-editor-heading">
+                    <p class="hint" style="margin:0">Edit channel</p>
+                    <h2 id="deep-ch-title">Channel</h2>
+                </div>
+                <button type="button" id="btn-deep-ch-save" class="raised button-submit emby-button">Save</button>
+            </div>
+            <div class="channel-editor-grid">
+                <section class="card section-card">
+                    <h3>Channel</h3>
+                    <div class="form-grid">
+                        <label class="field"><span>Number</span><input id="deep-ch-number" type="number" min="1" step="0.1" class="emby-input"></label>
+                        <label class="field"><span>Name</span><input id="deep-ch-name" type="text" class="emby-input" required></label>
+                        <label class="field"><span>Content type</span>
+                            <select id="deep-ch-content-type" class="emby-select">
+                                <option value="0">TV Show</option>
+                                <option value="1">Movie</option>
+                                <option value="2">Music Video</option>
+                                <option value="3">Music</option>
+                                <option value="4">Weather</option>
+                                <option value="5">News</option>
+                            </select>
+                        </label>
+                        <label class="field checkbox-field">
+                            <input id="deep-ch-enabled" type="checkbox" checked>
+                            <span class="fintv-check-box" aria-hidden="true"></span>
+                            <span>Enabled</span>
+                        </label>
+                    </div>
+                    <div id="deep-weather-fields" class="field-group hidden">
+                        <label class="field"><span>ZIP code</span><input id="deep-ch-weather-location" type="text" class="emby-input" inputmode="numeric" maxlength="10" placeholder="50317"></label>
+                    </div>
+                </section>
+                <section class="card section-card">
+                    <h3>Presentation</h3>
+                    <div class="form-grid">
+                        <label class="field"><span>Aspect ratio</span>
+                            <select id="deep-ch-aspect" class="emby-select">
+                                <option value="0">16:9</option>
+                                <option value="1">4:3</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Bug placement</span>
+                            <select id="deep-ch-bug" class="emby-select">
+                                <option value="0">Auto</option>
+                                <option value="1">Top Left</option>
+                                <option value="2">Top Right</option>
+                                <option value="3">Bottom Left</option>
+                                <option value="4">Bottom Right</option>
+                                <option value="5">No Bug</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Audio language</span><input id="deep-ch-audio" value="eng" class="emby-input"></label>
+                        <label class="field"><span>Logo set</span><select id="deep-ch-logo-set" class="emby-select"><option value="">None</option></select></label>
+                        <label class="field"><span>Channel logo</span><select id="deep-ch-logo-file" class="emby-select"><option value="">Default</option></select></label>
+                        <label class="field checkbox-field">
+                            <input id="deep-ch-scanlines" type="checkbox">
+                            <span class="fintv-check-box" aria-hidden="true"></span>
+                            <span>Scanlines (4:3 CRT look)</span>
+                        </label>
+                    </div>
+                </section>
+                <section class="card section-card">
+                    <h3>Library</h3>
+                    <p class="hint">Deep catalog options used by AI lineups and tagged library matching.</p>
+                    <label class="field"><span>Library tag</span><input id="deep-ch-library-tag" type="text" class="emby-input" placeholder="fintv-retro"></label>
+                    <label class="field"><span>Catalog mode</span>
+                        <select id="deep-ch-catalog-mode" class="emby-select">
+                            <option value="0">TV only</option>
+                            <option value="1">Movies only</option>
+                            <option value="2">Both</option>
+                            <option value="3">Music videos only</option>
+                        </select>
+                    </label>
+                    <label class="field"><span>AI fine-tune</span><textarea id="deep-ch-ai-prompt" class="emby-input" rows="4" placeholder="Optional extra instructions for this channel"></textarea></label>
+                </section>
+                <section class="card section-card commercial-playlist-card">
+                    <h3>Commercial playlists</h3>
+                    <p class="hint">When this channel goes to commercial break, it pulls spots from these playlists. Add as many as you want. Create playlists on the Commercials tab.</p>
+                    <div id="deep-ch-playlists" class="playlist-stack"></div>
+                    <div class="playlist-add">
+                        <select id="deep-ch-playlist-picker" class="emby-select"></select>
+                        <button type="button" id="btn-deep-ch-add-playlist" class="emby-button">Add playlist</button>
+                    </div>
+                </section>
+            </div>
+        </div>
         <div id="fintv-app">
             <header class="fintv-header">
                 <div class="fintv-header-text">
@@ -50,15 +144,16 @@
                 <a href="/presets" class="tab" data-tab="presets" role="tab">Presets</a>
                 <a href="/lineups" class="tab" data-tab="lineups" role="tab">Lineups</a>
                 <a href="/lists" class="tab" data-tab="list" role="tab">List</a>
+                <a href="/jellyfin-library" class="tab" data-tab="jellyfin" role="tab">Jellyfin Library</a>
                 <a href="/special" class="tab" data-tab="special" role="tab">Special Presentation</a>
                 <a href="/commercials" class="tab" data-tab="commercials" role="tab">Commercials</a>
+                <a href="/commercialbrainz" class="tab" data-tab="commercialbrainz" role="tab">CommercialBrainz</a>
                 <a href="/logos" class="tab" data-tab="logos" role="tab">Logo Sets</a>
                 <a href="/ebs" class="tab" data-tab="ebs" role="tab">EBS</a>
                 <a href="/ai" class="tab" data-tab="ai" role="tab">AI</a>
                 <a href="/weather" class="tab" data-tab="weather" role="tab">Weather</a>
                 <a href="/news" class="tab" data-tab="news" role="tab">News</a>
                 <a href="/general" class="tab" data-tab="general" role="tab">General</a>
-                <a href="/setup" class="tab" data-tab="setup" role="tab">Live TV Setup</a>
                 <a href="/tasks" class="tab" data-tab="tasks" role="tab">Tasks</a>
             </nav>
 
@@ -75,7 +170,7 @@
                     </div>
                     <aside id="channel-form-panel" class="split-side card hidden">
                         <div class="panel-header">
-                            <h2 id="channel-form-title">New Channel</h2>
+                        <h2 id="channel-form-title">Quick Edit</h2>
                             <button type="button" id="btn-close-channel" class="btn-ghost" title="Close">&times;</button>
                         </div>
                         <form id="channel-form" class="form-grid">
@@ -135,10 +230,10 @@
                             </label>
                             <div id="weather-fields" class="field-group hidden">
                                 <label class="field">
-                                    <span>Weather location (latLonQuery)</span>
-                                    <input id="ch-weather-location" type="text" class="emby-input" placeholder="50317, Des Moines, IA, USA">
+                                    <span>ZIP code</span>
+                                    <input id="ch-weather-location" type="text" class="emby-input" inputmode="numeric" pattern="[0-9]{5}" maxlength="10" placeholder="50317">
                                 </label>
-                                <p class="hint">Weather channels stream live local weather 24/7. Enter a ZIP code, city, or address (ws4kp latLonQuery). Configure WeatherStar display settings on the Weather tab.</p>
+                                <p class="hint">Weather channels stream live local weather 24/7 from this US ZIP code. Display screens and units are on the Weather tab.</p>
                             </div>
                             <label class="field checkbox-field">
                                 <input id="ch-enabled" type="checkbox" checked>
@@ -238,6 +333,38 @@
                 </div>
             </section>
 
+            <section id="tab-jellyfin" class="tab-panel hidden" hidden>
+                <div class="card section-card">
+                    <div class="section-header">
+                        <h3>Jellyfin Library</h3>
+                        <button type="button" id="btn-save-jellyfin-libraries" class="raised button-submit emby-button">Save libraries</button>
+                    </div>
+                    <p class="hint">Choose which Jellyfin libraries FinTV should pull from for TV, movies, music, and music videos. Check as many as you want. Leave a type unchecked to use every matching library. Libraries appear here after the Jellyfin plugin syncs the catalog.</p>
+                    <div class="jellyfin-library-grid">
+                        <section class="library-pick-card">
+                            <h4>TV</h4>
+                            <p class="hint">Series and episodes</p>
+                            <div id="jf-lib-tv" class="library-pick-list"></div>
+                        </section>
+                        <section class="library-pick-card">
+                            <h4>Movies</h4>
+                            <p class="hint">Feature films</p>
+                            <div id="jf-lib-movies" class="library-pick-list"></div>
+                        </section>
+                        <section class="library-pick-card">
+                            <h4>Music</h4>
+                            <p class="hint">Audio albums and tracks</p>
+                            <div id="jf-lib-music" class="library-pick-list"></div>
+                        </section>
+                        <section class="library-pick-card">
+                            <h4>Music videos</h4>
+                            <p class="hint">Music video library</p>
+                            <div id="jf-lib-musicvideos" class="library-pick-list"></div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+
             <section id="tab-special" class="tab-panel hidden" hidden>
                 <div class="toolbar lineup-toolbar">
                     <label class="inline-field">
@@ -251,11 +378,32 @@
             </section>
 
             <section id="tab-commercials" class="tab-panel hidden" hidden>
-                <p>Tag commercial files in Jellyfin with <code>fintv-commercial</code>, or sync YouTube commercials from <a href="https://commercialbrainz.org/" target="_blank" rel="noopener">CommercialBrainz</a>.</p>
-                <div class="toolbar">
-                    <button id="btn-sync-commercials" class="emby-button">Sync Jellyfin Library</button>
-                    <button id="btn-scan-blackframes" class="raised button-submit emby-button">Run Blackframe Scan</button>
+                <div class="card section-card">
+                    <h2>Commercials</h2>
+                    <p class="hint">Local commercial files from Jellyfin. Tag items with <code>fintv-commercial</code>, then sync. Blackframe scan writes chapter markers used for ad breaks. YouTube spots are managed on the <strong>CommercialBrainz</strong> tab.</p>
+                    <div class="toolbar">
+                        <button id="btn-sync-commercials" class="emby-button">Sync Jellyfin Library</button>
+                        <button id="btn-scan-blackframes" class="raised button-submit emby-button">Run Blackframe Scan</button>
+                    </div>
+                    <div id="commercial-status" class="status-card"></div>
+                    <div id="commercial-list" class="data-table-wrap"></div>
                 </div>
+                <div class="card section-card">
+                    <h3>CommercialBrainz search playlists</h3>
+                    <p class="hint">Save a search (brand, title, or keyword) and pull matching YouTube spots from CommercialBrainz into this library. Configure API token and allow-flags on the <strong>CommercialBrainz</strong> tab.</p>
+                    <div class="cb-playlist-add">
+                        <label class="field"><span>Name</span><input id="cb-playlist-name" type="text" class="emby-input" placeholder="80s toys"></label>
+                        <label class="field"><span>Search</span><input id="cb-playlist-query" type="text" class="emby-input" placeholder="McDonald's, Commodore, 1985"></label>
+                        <label class="field"><span>Max</span><input id="cb-playlist-max" type="number" min="1" max="100" value="50" class="emby-input"></label>
+                        <button type="button" id="btn-add-cb-playlist" class="raised button-submit emby-button">Add &amp; Pull</button>
+                    </div>
+                    <div id="cb-playlist-list" class="data-table-wrap"></div>
+                    <div id="cb-playlist-items" class="data-table-wrap"></div>
+                </div>
+            </section>
+
+            <section id="tab-commercialbrainz" class="tab-panel hidden" hidden>
+                <p>Sync YouTube commercials from <a href="https://commercialbrainz.org/" target="_blank" rel="noopener">CommercialBrainz</a>.</p>
                 <div class="card section-card">
                     <h3>CommercialBrainz YouTube Pool</h3>
                     <p class="hint">CommercialBrainz sync stores YouTube metadata only. At break time FinTV streams each spot directly into the channel (no local download). Click <strong>Preview Matches</strong> to see the commercials that the current filters will pull.</p>
@@ -332,8 +480,6 @@
                     <div id="brainz-status" class="status-card"></div>
                     <div id="brainz-preview" class="brainz-preview-wrap"></div>
                 </div>
-                <div id="commercial-status" class="status-card"></div>
-                <div id="commercial-list" class="data-table-wrap"></div>
             </section>
 
             <section id="tab-logos" class="tab-panel hidden" hidden>
@@ -537,13 +683,19 @@
             <section id="tab-weather" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <h3>WeatherStar live channels</h3>
-                    <p class="hint">WS4000 and WS3000 run inside FinTV as MPEG-TS channels. The graphics engine stays on loopback only; it is not a public website and does not use Docker sidecars or Playwright.</p>
+                    <p class="hint">Only one WeatherStar runs at a time. WS4000 and WS3000 stay on loopback inside FinTV; they are not a public website.</p>
                     <div id="weather-renderer-status" class="status-card"></div>
+                    <label class="field">
+                        <span>WeatherStar</span>
+                        <select id="weather-star-variant" class="emby-select">
+                            <option value="ws4kp">WeatherStar 4000</option>
+                            <option value="ws3kp">WeatherStar 3000</option>
+                        </select>
+                    </label>
                     <div class="actions">
-                        <button type="button" id="btn-ws4kp-start" class="raised button-submit emby-button">Start WS4000 renderer</button>
-                        <button type="button" id="btn-ws3kp-start" class="emby-button">Start WS3000 renderer</button>
+                        <button type="button" id="btn-weather-renderer-start" class="raised button-submit emby-button">Start renderer</button>
                     </div>
-                    <p class="hint">Apply the <strong>WeatherStar4000</strong> or <strong>WeatherStar3000</strong> preset, then set the ZIP / city on the Channels tab. Background music comes from a Jellyfin music library below (falls back to EBS music).</p>
+                    <p class="hint">Apply a weather preset, then set each channel&apos;s ZIP code below. Tuning a 4000 or 3000 channel switches to that WeatherStar. Background music comes from a Jellyfin music library (falls back to EBS music).</p>
                 </div>
                 <div class="card section-card">
                     <h3>Background music</h3>
@@ -558,18 +710,82 @@
                     </label>
                 </div>
                 <div class="card section-card">
-                    <h3>Display settings</h3>
-                    <p class="hint">Paste a ws4kp permalink query to control which modules appear. Location is always taken from the channel.</p>
+                    <h3>Location</h3>
+                    <p class="hint">WeatherStar looks up NWS data by US ZIP code. Each weather channel can have its own ZIP. New weather channels use the default ZIP.</p>
                     <label class="field">
-                        <span>Import full permalink</span>
-                        <input id="weather-full-permalink" type="url" class="emby-input" placeholder="http://127.0.0.1:8080/?hazards=true&amp;...">
+                        <span>Default ZIP code</span>
+                        <input id="weather-default-zip" type="text" class="emby-input" inputmode="numeric" maxlength="10" placeholder="50317" autocomplete="postal-code">
                     </label>
-                    <div class="actions" style="margin-bottom:1rem">
-                        <button type="button" id="btn-import-weather-permalink" class="emby-button">Import permalink settings</button>
+                    <div id="weather-zip-list" class="weather-zip-list"></div>
+                </div>
+                <div class="card section-card">
+                    <h3>Display settings</h3>
+                    <p class="hint">Choose which WeatherStar screens play in the loop. Location always comes from the ZIP codes above.</p>
+                    <h4>Screens</h4>
+                    <div class="checkbox-grid" id="weather-screens">
+                        <label class="field checkbox-field"><input id="wx-hazards" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Weather alerts</span></label>
+                        <label class="field checkbox-field"><input id="wx-current-weather" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Current conditions</span></label>
+                        <label class="field checkbox-field"><input id="wx-latest-observations" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Latest observations</span></label>
+                        <label class="field checkbox-field"><input id="wx-hourly" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Hourly forecast</span></label>
+                        <label class="field checkbox-field"><input id="wx-hourly-graph" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Hourly graph</span></label>
+                        <label class="field checkbox-field"><input id="wx-travel" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Travel cities</span></label>
+                        <label class="field checkbox-field"><input id="wx-regional-forecast" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Regional forecast</span></label>
+                        <label class="field checkbox-field"><input id="wx-local-forecast" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Local forecast</span></label>
+                        <label class="field checkbox-field"><input id="wx-extended-forecast" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Extended forecast</span></label>
+                        <label class="field checkbox-field"><input id="wx-almanac" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Almanac</span></label>
+                        <label class="field checkbox-field"><input id="wx-spc-outlook" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Storm outlook</span></label>
+                        <label class="field checkbox-field"><input id="wx-radar" type="checkbox" checked><span class="fintv-check-box" aria-hidden="true"></span><span>Radar</span></label>
                     </div>
+                    <div class="form-grid">
+                        <label class="field">
+                            <span>Units</span>
+                            <select id="wx-units" class="emby-select">
+                                <option value="us">US</option>
+                                <option value="si">Metric</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>Cycle speed</span>
+                            <select id="wx-speed" class="emby-select">
+                                <option value="0.50">Very fast</option>
+                                <option value="0.75">Fast</option>
+                                <option value="1.00" selected>Normal</option>
+                                <option value="1.25">Slow</option>
+                                <option value="1.50">Very slow</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>Display mode</span>
+                            <select id="wx-viewMode" class="emby-select">
+                                <option value="standard" selected>Standard</option>
+                                <option value="wide">Widescreen</option>
+                                <option value="wide-enhanced">Widescreen enhanced</option>
+                                <option value="portrait-enhanced">Portrait enhanced</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>Music / voice volume (0–1)</span>
+                            <input id="wx-mediaVolume" type="number" class="emby-input" min="0" max="1" step="0.05" value="0.75">
+                        </label>
+                    </div>
+                    <label class="field checkbox-field">
+                        <input id="wx-customTextEnable" type="checkbox">
+                        <span class="fintv-check-box" aria-hidden="true"></span>
+                        <span>Scroll custom text on the bottom line</span>
+                    </label>
                     <label class="field">
-                        <span>WeatherStar display settings (permalink query)</span>
-                        <textarea id="weather-permalink-query" class="emby-input" rows="5" placeholder="hazards=true&amp;current-weather=true&amp;..."></textarea>
+                        <span>Custom scroll text</span>
+                        <input id="wx-customText" type="text" class="emby-input" placeholder="You're watching FinTV Weather">
+                    </label>
+                    <label class="field checkbox-field">
+                        <input id="wx-scanLines" type="checkbox">
+                        <span class="fintv-check-box" aria-hidden="true"></span>
+                        <span>Scanlines</span>
+                    </label>
+                    <label class="field checkbox-field">
+                        <input id="wx-stickyKiosk" type="checkbox" checked>
+                        <span class="fintv-check-box" aria-hidden="true"></span>
+                        <span>Keep kiosk mode (recommended for live channels)</span>
                     </label>
                     <div class="actions">
                         <button type="button" id="btn-save-weather" class="raised button-submit emby-button">Save Weather Settings</button>
@@ -580,7 +796,16 @@
             <section id="tab-general" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <h2>General</h2>
-                    <p class="hint">Plugin-wide settings. Debug logging writes extra detail to the Jellyfin server log for troubleshooting AI channel building and playout.</p>
+                    <p class="hint">Server-wide settings. Debug logging writes extra detail to the FinTV log for troubleshooting AI channel building and playout.</p>
+                    <label class="field">
+                        <span>Plugin API key</span>
+                        <input id="general-api-key" type="text" class="emby-input" autocomplete="off" spellcheck="false">
+                    </label>
+                    <p class="hint">Created automatically on first boot if missing. Paste this key into the FinTV Jellyfin plugin with this server's URL. The same value is used as <code>?apiKey=</code> on M3U and XMLTV URLs.</p>
+                    <div class="actions" style="margin-bottom:1rem">
+                        <button type="button" id="btn-copy-api-key" class="emby-button">Copy API key</button>
+                        <button type="button" id="btn-generate-api-key" class="emby-button">Generate new key</button>
+                    </div>
                     <label class="field checkbox-field">
                         <input id="general-debug-logging" type="checkbox">
                         <span class="fintv-check-box" aria-hidden="true"></span>
@@ -599,39 +824,6 @@
                     <div class="actions">
                         <button type="button" id="btn-save-general" class="raised button-submit emby-button">Save General Settings</button>
                     </div>
-                </div>
-            </section>
-
-            <section id="tab-setup" class="tab-panel hidden" hidden>
-                <div class="card">
-                    <h2>Jellyfin Live TV URLs</h2>
-                    <p class="hint">Jellyfin fetches these URLs from the server itself. They must not require login and must use an address Jellyfin can reach (not <code>localhost</code> unless Jellyfin runs on the same machine and resolves it).</p>
-                    <label class="field">
-                        <span>Public server URL (optional override)</span>
-                        <input id="setup-public-base" type="url" class="emby-input" placeholder="http://192.168.1.50:8096">
-                    </label>
-                    <p class="hint">Configure off-air Emergency Broadcast System playback on the <strong>EBS</strong> tab.</p>
-                    <div class="actions" style="margin-bottom:1rem">
-                        <button type="button" id="btn-save-setup" class="raised button-submit emby-button">Save &amp; Refresh URLs</button>
-                    </div>
-                    <p class="hint">Detected base URL: <code id="setup-base-url"></code></p>
-                    <div class="url-row">
-                        <div class="url-block">
-                            <strong>M3U Tuner URL</strong>
-                            <code id="setup-m3u"></code>
-                        </div>
-                        <button type="button" class="emby-button btn-copy" data-copy-target="setup-m3u">Copy</button>
-                        <a id="setup-m3u-test" class="emby-button" target="_blank" rel="noopener">Test</a>
-                    </div>
-                    <div class="url-row">
-                        <div class="url-block">
-                            <strong>XMLTV Guide URL</strong>
-                            <code id="setup-epg"></code>
-                        </div>
-                        <button type="button" class="emby-button btn-copy" data-copy-target="setup-epg">Copy</button>
-                        <a id="setup-epg-test" class="emby-button" target="_blank" rel="noopener">Test</a>
-                    </div>
-                    <ol id="setup-steps"></ol>
                 </div>
             </section>
 

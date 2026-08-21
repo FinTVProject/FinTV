@@ -30,6 +30,16 @@ public class ChannelUpsertRequest
 
     public string? WeatherLocationQuery { get; set; }
 
+    public string? FilterJson { get; set; }
+
+    public ChannelCatalogMode? CatalogMode { get; set; }
+
+    public string? AiFineTunePrompt { get; set; }
+
+    public Guid? CommercialPresetId { get; set; }
+
+    public List<Guid>? CommercialSearchPlaylistIds { get; set; }
+
     public Channel ToChannel()
     {
         var channel = new Channel
@@ -44,13 +54,18 @@ public class ChannelUpsertRequest
             LogoSetId = LogoSetId,
             LogoFileName = LogoFileName,
             AudioLanguage = AudioLanguage,
-            WeatherLocationQuery = WeatherLocationQuery
+            WeatherLocationQuery = WeatherLocationQuery,
+            FilterJson = FilterJson,
+            CatalogMode = CatalogMode,
+            AiFineTunePrompt = AiFineTunePrompt,
+            CommercialPresetId = CommercialPresetId,
+            CommercialSearchPlaylistIds = CommercialSearchPlaylistIds ?? new List<Guid>()
         };
 
         if (channel.ContentType == ChannelContentType.Weather)
         {
             channel.WeatherLocationQuery = string.IsNullOrWhiteSpace(channel.WeatherLocationQuery)
-                ? WeatherStarChannelService.DefaultWeatherLocationQuery
+                ? WeatherStarChannelService.ResolveDefaultLocationQuery()
                 : channel.WeatherLocationQuery.Trim();
         }
 
