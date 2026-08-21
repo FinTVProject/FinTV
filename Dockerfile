@@ -21,6 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         chromium \
         fonts-liberation \
         fonts-dejavu-core \
+        intel-media-va-driver \
+        i965-va-driver \
+        mesa-va-drivers \
+        libva2 \
+        vainfo \
     && rm -rf /var/lib/apt/lists/* \
     && wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
     && chmod +x /usr/local/bin/yt-dlp
@@ -38,6 +43,8 @@ ENV FINTV_CONFIG=/config \
     FFMPEG_PATH=/usr/bin/ffmpeg \
     FINTV_YTDLP_PATH=/usr/local/bin/yt-dlp \
     CHROMIUM_PATH=/usr/bin/chromium \
+    FFMPEG_HWACCEL=vaapi \
+    FFMPEG_VAAPI_DEVICE=/dev/dri/renderD128 \
     PORT=8097
 
 EXPOSE 8097

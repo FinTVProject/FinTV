@@ -47,14 +47,20 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "Username and password are required." });
         }
 
+        if (request.Password.Length < 8)
+        {
+            return BadRequest(new { message = "Password must be at least 8 characters." });
+        }
+
+        var userName = request.UserName.Trim();
         _db.AdminUsers.Add(new AdminUser
         {
-            UserName = request.UserName.Trim(),
+            UserName = userName,
             PasswordHash = Services.PasswordHasher.Hash(request.Password)
         });
         await _db.SaveChangesAsync(cancellationToken);
-        await SignInAsync(request.UserName.Trim());
-        return Ok(new { authenticated = true, userName = request.UserName.Trim() });
+        await SignInAsync(userName);
+        return Ok(new { authenticated = true, userName });
     }
 
     [HttpPost("login")]

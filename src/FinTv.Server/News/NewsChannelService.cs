@@ -2,6 +2,7 @@ using CliWrap;
 using FinTv.Data;
 using FinTv.Domain;
 using FinTv.Services;
+using FinTv.Streaming;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -11,6 +12,7 @@ public sealed class NewsChannelService
 {
     private readonly FinTvDbContext _db;
     private readonly IFfmpegLocator _ffmpegLocator;
+    private readonly FfmpegEncodingService _encoding;
     private readonly EbsService _ebs;
     private readonly JellyfinCatalogService _catalog;
     private readonly NewsHeadlineService _headlines;
@@ -20,6 +22,7 @@ public sealed class NewsChannelService
     public NewsChannelService(
         FinTvDbContext db,
         IFfmpegLocator ffmpegLocator,
+        FfmpegEncodingService encoding,
         EbsService ebs,
         JellyfinCatalogService catalog,
         NewsHeadlineService headlines,
@@ -28,6 +31,7 @@ public sealed class NewsChannelService
     {
         _db = db;
         _ffmpegLocator = ffmpegLocator;
+        _encoding = encoding;
         _ebs = ebs;
         _catalog = catalog;
         _headlines = headlines;
@@ -71,9 +75,10 @@ public sealed class NewsChannelService
         var assFilter = NewsAssBuilder.EscapeAssFilterPath(assPath);
         var args = new List<string>
         {
-            "-hide_banner", "-loglevel", "warning",
-            "-f", "lavfi", "-i", $"color=c=0x101010:s={width}x{height}:r=30"
+            "-hide_banner", "-loglevel", "warning"
         };
+        args.AddRange(_encoding.HardwareDeviceArgs);
+        args.AddRange(["-f", "lavfi", "-i", $"color=c=0x101010:s={width}x{height}:r=30"]);
 
         if (!string.IsNullOrWhiteSpace(musicPath) && File.Exists(musicPath))
         {
@@ -88,19 +93,21 @@ public sealed class NewsChannelService
         if (hasSpeech)
         {
             args.AddRange(["-i", speechPath!]);
-            args.AddRange([
-                "-filter_complex",
-                $"[0:v]ass='{assFilter}'[vout];[1:a]volume=0.18[a1];[2:a]volume=1.0[a2];[a1][a2]amix=inputs=2:duration=first:dropout_transition=2[aout]"
-            ]);
-            args.AddRange(["-map", "[vout]", "-map", "[aout]"]);
+            var graph = _encoding.AdaptFilterComplexForEncoder(
+                $"[0:v]ass='{assFilter}'[vout];[1:a]volume=0.18[a1];[2:a]volume=1.0[a2];[a1][a2]amix=inputs=2:duration=first:dropout_transition=2[aout]",
+                _encoding.Encoder);
+            args.AddRange(["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]"]);
         }
         else
         {
-            args.AddRange(["-vf", $"ass='{assFilter}'", "-map", "0:v", "-map", "1:a"]);
+            args.AddRange([
+                "-vf", _encoding.AdaptVideoFilterForEncoder($"ass='{assFilter}'", _encoding.Encoder),
+                "-map", "0:v", "-map", "1:a"
+            ]);
         }
 
+        _encoding.AppendVideoEncoder(args, stillImage: true);
         args.AddRange([
-            "-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage", "-pix_fmt", "yuv420p", "-g", "30",
             "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000",
             "-t", duration.ToString(),
             "-f", "mpegts", "-mpegts_flags", "+resend_headers",
@@ -132,16 +139,19 @@ public sealed class NewsChannelService
     {
         var (width, height) = channel.AspectRatio == AspectRatioMode.FourThree ? (640, 480) : (1280, 720);
         var scroll = EscapeDraw(string.Join("   •   ", articles.Select(a => a.Title).DefaultIfEmpty("No headlines loaded")));
-        var vf = $"drawbox=x=0:y=0:w=iw:h=90:color=0xe11d48@0.92:t=fill," +
-                 $"drawtext=text='{EscapeDraw(header)}':fontcolor=white:fontsize=36:x=40:y=28," +
-                 $"drawbox=x=0:y=h-80:w=iw:h=80:color=0x202020@0.92:t=fill," +
-                 $"drawtext=text='{scroll}':fontcolor=white:fontsize=26:x=w-mod(t*70\\,w+text_w):y=h-52";
+        var vf = _encoding.AdaptVideoFilterForEncoder(
+            $"drawbox=x=0:y=0:w=iw:h=90:color=0xe11d48@0.92:t=fill," +
+            $"drawtext=text='{EscapeDraw(header)}':fontcolor=white:fontsize=36:x=40:y=28," +
+            $"drawbox=x=0:y=h-80:w=iw:h=80:color=0x202020@0.92:t=fill," +
+            $"drawtext=text='{scroll}':fontcolor=white:fontsize=26:x=w-mod(t*70\\,w+text_w):y=h-52",
+            _encoding.Encoder);
 
         var args = new List<string>
         {
-            "-hide_banner", "-loglevel", "warning",
-            "-f", "lavfi", "-i", $"color=c=0x101010:s={width}x{height}:r=30"
+            "-hide_banner", "-loglevel", "warning"
         };
+        args.AddRange(_encoding.HardwareDeviceArgs);
+        args.AddRange(["-f", "lavfi", "-i", $"color=c=0x101010:s={width}x{height}:r=30"]);
         if (!string.IsNullOrWhiteSpace(musicPath) && File.Exists(musicPath))
         {
             args.AddRange(["-stream_loop", "-1", "-i", musicPath]);
@@ -162,8 +172,8 @@ public sealed class NewsChannelService
             args.AddRange(["-vf", vf, "-map", "0:v", "-map", "1:a"]);
         }
 
+        _encoding.AppendVideoEncoder(args, stillImage: true);
         args.AddRange([
-            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000",
             "-t", duration.ToString(),
             "-f", "mpegts", "pipe:1"

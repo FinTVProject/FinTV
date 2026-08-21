@@ -16,16 +16,17 @@
   <Config Name="Web UI" Target="8097" Default="8097" Mode="tcp" Description="Web UI, admin API, M3U/XMLTV/stream" Type="Port" Display="always" Required="true" Mask="false">8097</Config>
   <Config Name="Appdata" Target="/config" Default="/mnt/user/appdata/fintv-server" Mode="rw" Description="Logos, caches, weather/news working files" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/fintv-server</Config>
   <Config Name="Media" Target="/media" Default="/mnt/user/media" Mode="rw" Description="Same library share Jellyfin uses" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media</Config>
+  <Config Name="Intel GPU" Target="" Default="" Mode="" Description="Pass /dev/dri for Intel VAAPI encode and decode" Type="Device" Display="always" Required="false" Mask="false">/dev/dri</Config>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
   <Config Name="TZ" Target="TZ" Default="America/Chicago" Mode="" Description="Timezone" Type="Variable" Display="always" Required="false" Mask="false">America/Chicago</Config>
   <Config Name="Jellyfin URL" Target="JELLYFIN_URL" Default="http://Jellyfin:8096" Mode="" Description="Jellyfin base URL on the shared Docker network" Type="Variable" Display="always" Required="false" Mask="false">http://Jellyfin:8096</Config>
   <Config Name="FinTV API Key" Target="FINTV_API_KEY" Default="" Mode="" Description="Shared secret with the Jellyfin plugin and IPTV URLs" Type="Variable" Display="always" Required="true" Mask="true"></Config>
-  <Config Name="Admin Username" Target="FINTV_ADMIN_USER" Default="admin" Mode="" Description="Web UI login (first run only)" Type="Variable" Display="always" Required="false" Mask="false">admin</Config>
-  <Config Name="Admin Password" Target="FINTV_ADMIN_PASSWORD" Default="" Mode="" Description="Web UI password (first run only)" Type="Variable" Display="always" Required="false" Mask="true"></Config>
   <Config Name="Postgres Host" Target="POSTGRES_HOST" Default="fintv-postgres" Mode="" Description="PostgreSQL hostname on the Docker network" Type="Variable" Display="always" Required="true" Mask="false">fintv-postgres</Config>
   <Config Name="Postgres Port" Target="POSTGRES_PORT" Default="5432" Mode="" Description="PostgreSQL port" Type="Variable" Display="advanced" Required="false" Mask="false">5432</Config>
   <Config Name="Postgres Database" Target="POSTGRES_DB" Default="fintv" Mode="" Description="Database name" Type="Variable" Display="advanced" Required="false" Mask="false">fintv</Config>
   <Config Name="Postgres User" Target="POSTGRES_USER" Default="fintv" Mode="" Description="Database user" Type="Variable" Display="advanced" Required="false" Mask="false">fintv</Config>
   <Config Name="Postgres Password" Target="POSTGRES_PASSWORD" Default="" Mode="" Description="Database password" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="FFmpeg HWAccel" Target="FFMPEG_HWACCEL" Default="vaapi" Mode="" Description="Set vaapi for Intel Quick Sync encode/decode, or leave empty for software" Type="Variable" Display="advanced" Required="false" Mask="false">vaapi</Config>
+  <Config Name="VAAPI Device" Target="FFMPEG_VAAPI_DEVICE" Default="/dev/dri/renderD128" Mode="" Description="Intel render node" Type="Variable" Display="advanced" Required="false" Mask="false">/dev/dri/renderD128</Config>
 </Container>

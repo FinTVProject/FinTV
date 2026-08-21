@@ -30,6 +30,7 @@ public class FfmpegCommandBuilder
             "-loglevel", "warning"
         };
         args.AddRange(context.HardwareDeviceArgs);
+        args.AddRange(context.HardwareDecodeArgs);
         args.AddRange(new[]
         {
             "-ss", startSeconds.ToString("F3", CultureInfo.InvariantCulture),
@@ -84,6 +85,11 @@ public class FfmpegCommandBuilder
         }
 
         args.AddRange(context.HardwareDeviceArgs);
+        if (!string.Equals(inputPath, "pipe:0", StringComparison.Ordinal))
+        {
+            args.AddRange(context.HardwareDecodeArgs);
+        }
+
         args.AddRange(new[]
         {
             "-ss", startSeconds.ToString("F3", CultureInfo.InvariantCulture),
@@ -438,20 +444,27 @@ public class FfmpegCommandBuilder
         string? audioPath)
     {
         var fps = captureFps.ToString(CultureInfo.InvariantCulture);
-        var gop = Math.Max(12, (int)Math.Round(captureFps * 2));
         var hasAudio = !string.IsNullOrWhiteSpace(audioPath) && File.Exists(audioPath);
+        var context = CreateEncodingContext(width, height);
+        var vf = _encoding.AdaptVideoFilterForEncoder(
+            $"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p",
+            context.Encoder);
 
         var args = new List<string>
         {
             "-hide_banner",
             "-loglevel", "warning",
             "-fflags", "+genpts",
-            "-thread_queue_size", "512",
+            "-thread_queue_size", "512"
+        };
+        args.AddRange(context.HardwareDeviceArgs);
+        args.AddRange(new[]
+        {
             "-f", "image2pipe",
             "-vcodec", "mjpeg",
             "-framerate", fps,
             "-i", "pipe:0"
-        };
+        });
 
         if (hasAudio)
         {
@@ -472,19 +485,13 @@ public class FfmpegCommandBuilder
 
         args.AddRange(new[]
         {
-            "-vf", $"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p",
+            "-vf", vf,
             "-map", "0:v",
-            "-map", "1:a",
-            "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-tune", "zerolatency",
-            "-profile:v", "baseline",
-            "-level", "3.1",
-            "-pix_fmt", "yuv420p",
-            "-g", gop.ToString(CultureInfo.InvariantCulture),
-            "-keyint_min", Math.Max(1, (int)Math.Round(captureFps)).ToString(CultureInfo.InvariantCulture),
-            "-sc_threshold", "0",
-            "-bf", "0",
+            "-map", "1:a"
+        });
+        AppendVideoEncoderArgs(args, context, stillImage: true);
+        args.AddRange(new[]
+        {
             "-c:a", "aac",
             "-b:a", "192k",
             "-ac", "2",
@@ -525,27 +532,33 @@ public class FfmpegCommandBuilder
 
     public IReadOnlyList<string> BuildBlackdetectCommand(string inputPath)
     {
-        return new List<string>
+        var args = new List<string>
         {
-            "-hide_banner",
+            "-hide_banner"
+        };
+        args.AddRange(_encoding.HardwareDecodeArgs);
+        args.AddRange(new[]
+        {
             "-i", inputPath,
             "-vf", "blackdetect=d=0.5:pix_th=0.10",
             "-an",
             "-f", "null",
             "-"
-        };
+        });
+        return args;
     }
 
     private readonly record struct EncodingContext(
         string Encoder,
-        IReadOnlyList<string> HardwareDeviceArgs);
+        IReadOnlyList<string> HardwareDeviceArgs,
+        IReadOnlyList<string> HardwareDecodeArgs);
 
     private EncodingContext CreateEncodingContext(int width, int height, string? mediaPath = null)
     {
         _ = width;
         _ = height;
         _ = mediaPath;
-        return new EncodingContext(_encoding.Encoder, _encoding.HardwareDeviceArgs);
+        return new EncodingContext(_encoding.Encoder, _encoding.HardwareDeviceArgs, _encoding.HardwareDecodeArgs);
     }
 
     private void AppendVideoEncoderArgs(List<string> args, EncodingContext context, bool stillImage = false)
