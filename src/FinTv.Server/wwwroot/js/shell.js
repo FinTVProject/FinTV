@@ -1,5 +1,6 @@
 (function () {
     const titles = {
+        guide: 'TV Guide',
         channels: 'Channels',
         presets: 'Presets',
         lineups: 'Lineups',
@@ -14,6 +15,24 @@
         general: 'General',
         setup: 'Live TV Setup',
         tasks: 'Tasks'
+    };
+
+    const subtitles = {
+        guide: 'What\'s on now across FinTV channels',
+        channels: 'Manage Live TV channels',
+        presets: 'Create the Binarygeek119 ready-made lineup',
+        lineups: 'Edit 24-hour schedules and playout',
+        list: 'Register Jellyfin playlists as FinTV lists',
+        special: 'Recurring blocks that override the normal lineup',
+        commercials: 'Jellyfin and CommercialBrainz ad pools',
+        logos: 'Channel bugs and logo sets',
+        ebs: 'Off-air Emergency Broadcast System',
+        ai: 'AI lineup generation and tagging',
+        weather: 'WeatherStar live channels',
+        news: 'Live RSS news channel',
+        general: 'Server-wide FinTV settings',
+        setup: 'Jellyfin Live TV tuner and guide URLs',
+        tasks: 'Rebuild playouts and maintenance'
     };
 
     async function api(path, options) {
@@ -48,6 +67,42 @@
         return data;
     }
 
+    function safeReturnPath(value) {
+        if (!value || value[0] !== '/' || value[1] === '/') {
+            return '/channels';
+        }
+
+        return value;
+    }
+
+    function syncDrawer(name) {
+        const nav = document.getElementById('drawer-nav');
+        if (!nav) {
+            return;
+        }
+
+        nav.querySelectorAll('a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
+        const title = titles[name];
+        if (title) {
+            document.getElementById('page-title').textContent = title;
+        }
+        const subtitle = document.getElementById('page-subtitle');
+        if (subtitle && subtitles[name]) {
+            subtitle.textContent = subtitles[name];
+        }
+    }
+
+    function restorePathAfterLogin() {
+        const path = (location.pathname || '/').replace(/\/+$/, '') || '/';
+        if (path !== '/login') {
+            return;
+        }
+
+        const params = new URLSearchParams(location.search);
+        const dest = safeReturnPath(params.get('ReturnUrl') || params.get('returnUrl') || '/channels');
+        history.replaceState({}, '', dest);
+    }
+
     function showLogin(needsSetup, userName) {
         document.getElementById('login-screen').classList.remove('hidden');
         document.getElementById('app-shell').classList.add('hidden');
@@ -67,12 +122,19 @@
         if (userName) {
             document.getElementById('topbar-user').textContent = userName;
         }
+
+        const path = (location.pathname || '/').replace(/\/+$/, '') || '/';
+        if (path === '/' || path === '/index.html') {
+            history.replaceState({}, '', '/login');
+        }
+        document.title = (needsSetup ? 'Create admin' : 'Sign in') + ' · FinTV';
     }
 
     function showApp(userName) {
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('app-shell').classList.remove('hidden');
         document.getElementById('topbar-user').textContent = userName || '';
+        restorePathAfterLogin();
         buildDrawer();
         const page = document.getElementById('FinTVConfigPage');
         if (page && window.FinTV) {
@@ -86,20 +148,19 @@
         const tabs = document.querySelectorAll('#FinTVConfigPage .fintv-tabs .tab');
         nav.innerHTML = '';
         tabs.forEach((tab) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.textContent = tab.textContent;
-            btn.dataset.tab = tab.dataset.tab;
+            const link = document.createElement('a');
+            link.href = tab.getAttribute('href') || ('/' + tab.dataset.tab);
+            link.textContent = tab.textContent.trim();
+            link.dataset.tab = tab.dataset.tab;
             if (tab.classList.contains('active')) {
-                btn.classList.add('active');
+                link.classList.add('active');
             }
-            btn.addEventListener('click', () => {
-                tab.click();
-                nav.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
-                document.getElementById('page-title').textContent = titles[tab.dataset.tab] || tab.textContent;
-            });
-            nav.appendChild(btn);
+            nav.appendChild(link);
         });
+        const current = window.FinTV && window.FinTV.tabFromPath
+            ? window.FinTV.tabFromPath(location.pathname)
+            : 'channels';
+        syncDrawer(current);
     }
 
     function bindPathMappings() {
@@ -179,6 +240,11 @@
                 location.reload();
             });
             window.addEventListener('fintv-auth-required', () => showLogin(false));
+            window.addEventListener('fintv-tabchange', (e) => {
+                if (e.detail && e.detail.tab) {
+                    syncDrawer(e.detail.tab);
+                }
+            });
         } catch (ex) {
             showLogin(true);
         }

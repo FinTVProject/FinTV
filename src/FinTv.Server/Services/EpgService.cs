@@ -41,6 +41,102 @@ public class EpgService
         return Utf8NoBom.GetString(await GenerateXmlTvBytesAsync(baseUrl, cancellationToken));
     }
 
+    /// <summary>
+    /// Builds a JSON TV guide for the admin Web UI from current playout.
+    /// </summary>
+    public async Task<TvGuidePage> GetGuideAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        string baseUrl,
+        CancellationToken cancellationToken = default)
+    {
+        if (toUtc <= fromUtc)
+        {
+            toUtc = fromUtc.AddHours(6);
+        }
+
+        var nowUtc = DateTime.UtcNow;
+        var tz = ScheduleTimeZoneHelper.ResolveScheduleTimeZone();
+        var channels = await _db.Channels.Where(c => c.Enabled).OrderBy(c => c.Number).AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var items = await _db.PlayoutItems
+            .Where(p =>
+                p.Finish > fromUtc
+                && p.Start < toUtc
+                && (p.GuideGroup == null || p.GuideGroup != "commercial"))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var metadataByItemId = _guideMetadata.ResolveBatch(items.Select(i => i.JellyfinItemId));
+        var channelsById = channels.ToDictionary(c => c.Id);
+        var weatherItems = items
+            .Where(i => i.IsVirtual && i.VirtualSource == VirtualContentSource.WeatherStar)
+            .ToList();
+        var weatherMetadataByPlayoutId = await _weatherGuideMetadata.ResolveAsync(
+            weatherItems,
+            channelsById,
+            channel => GetLogoUrl(channel, baseUrl),
+            cancellationToken);
+
+        var programs = new List<TvGuideProgram>(items.Count);
+        foreach (var item in items)
+        {
+            GuideProgramMetadata? metadata = null;
+            if (weatherMetadataByPlayoutId.TryGetValue(item.Id, out var weatherMetadata))
+            {
+                metadata = weatherMetadata;
+            }
+            else if (item.JellyfinItemId.HasValue)
+            {
+                metadataByItemId.TryGetValue(item.JellyfinItemId.Value, out metadata);
+            }
+
+            var start = AsUtc(item.Start);
+            var finish = AsUtc(item.Finish);
+            var posterUrl = !string.IsNullOrWhiteSpace(metadata?.IconUrl)
+                ? metadata.IconUrl
+                : GuideMetadataService.GetPosterUrl(baseUrl, metadata?.PosterItemId);
+
+            programs.Add(new TvGuideProgram
+            {
+                Id = item.Id,
+                ChannelId = item.ChannelId,
+                Start = start,
+                Finish = finish,
+                Title = string.IsNullOrWhiteSpace(metadata?.Title) ? item.Title : metadata.Title,
+                SubTitle = metadata?.SubTitle,
+                Description = metadata?.Description,
+                Episode = metadata?.EpisodeOnScreen,
+                Categories = metadata?.Categories ?? Array.Empty<string>(),
+                Year = metadata?.ProductionYear,
+                Rating = metadata?.OfficialRating,
+                PosterUrl = posterUrl,
+                IsNow = start <= nowUtc && finish > nowUtc,
+                IsVirtual = item.IsVirtual
+            });
+        }
+
+        return new TvGuidePage
+        {
+            From = fromUtc,
+            To = toUtc,
+            Now = nowUtc,
+            TimeZone = tz.Id,
+            Channels = channels.Select(channel => new TvGuideChannel
+            {
+                Id = channel.Id,
+                Number = ChannelNumbers.Format(channel.Number),
+                Name = channel.Name,
+                LogoUrl = GetLogoUrl(channel, baseUrl),
+                ContentType = channel.ContentType.ToString()
+            }).ToList(),
+            Programs = programs
+        };
+    }
+
+    private static DateTime AsUtc(DateTime value)
+        => value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+
     private async Task<XDocument> BuildXmlTvDocumentAsync(string baseUrl, CancellationToken cancellationToken)
     {
         var channels = await _db.Channels.Where(c => c.Enabled).OrderBy(c => c.Number).AsNoTracking().ToListAsync(cancellationToken);

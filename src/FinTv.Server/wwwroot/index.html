@@ -22,7 +22,7 @@
   </div>
   <div id="app-shell" class="hidden">
     <aside class="app-drawer">
-      <div class="drawer-brand"><img src="/logo.png" alt=""><span>FinTV</span></div>
+      <a href="/channels" class="drawer-brand" data-tab="channels"><img src="/logo.png" alt=""><span>FinTV</span></a>
       <nav class="drawer-nav" id="drawer-nav"></nav>
       <button type="button" id="btn-logout" class="drawer-logout">Sign out</button>
     </aside>
@@ -30,7 +30,7 @@
       <header class="app-topbar">
         <div>
           <h1 id="page-title">Channels</h1>
-          <p class="muted">Broadcast channels for Jellyfin Live TV</p>
+          <p class="muted" id="page-subtitle">Manage Live TV channels</p>
         </div>
         <div id="topbar-user" class="topbar-user"></div>
       </header>
@@ -45,20 +45,21 @@
             </header>
 
             <nav class="fintv-tabs" role="tablist">
-                <button type="button" class="tab active" data-tab="channels" role="tab">Channels</button>
-                <button type="button" class="tab" data-tab="presets" role="tab">Presets</button>
-                <button type="button" class="tab" data-tab="lineups" role="tab">Lineups</button>
-                <button type="button" class="tab" data-tab="list" role="tab">List</button>
-                <button type="button" class="tab" data-tab="special" role="tab">Special Presentation</button>
-                <button type="button" class="tab" data-tab="commercials" role="tab">Commercials</button>
-                <button type="button" class="tab" data-tab="logos" role="tab">Logo Sets</button>
-                <button type="button" class="tab" data-tab="ebs" role="tab">EBS</button>
-                <button type="button" class="tab" data-tab="ai" role="tab">AI</button>
-                <button type="button" class="tab" data-tab="weather" role="tab">Weather</button>
-                <button type="button" class="tab" data-tab="news" role="tab">News</button>
-                <button type="button" class="tab" data-tab="general" role="tab">General</button>
-                <button type="button" class="tab" data-tab="setup" role="tab">Live TV Setup</button>
-                <button type="button" class="tab" data-tab="tasks" role="tab">Tasks</button>
+                <a href="/guide" class="tab" data-tab="guide" role="tab">Guide</a>
+                <a href="/channels" class="tab active" data-tab="channels" role="tab">Channels</a>
+                <a href="/presets" class="tab" data-tab="presets" role="tab">Presets</a>
+                <a href="/lineups" class="tab" data-tab="lineups" role="tab">Lineups</a>
+                <a href="/lists" class="tab" data-tab="list" role="tab">List</a>
+                <a href="/special" class="tab" data-tab="special" role="tab">Special Presentation</a>
+                <a href="/commercials" class="tab" data-tab="commercials" role="tab">Commercials</a>
+                <a href="/logos" class="tab" data-tab="logos" role="tab">Logo Sets</a>
+                <a href="/ebs" class="tab" data-tab="ebs" role="tab">EBS</a>
+                <a href="/ai" class="tab" data-tab="ai" role="tab">AI</a>
+                <a href="/weather" class="tab" data-tab="weather" role="tab">Weather</a>
+                <a href="/news" class="tab" data-tab="news" role="tab">News</a>
+                <a href="/general" class="tab" data-tab="general" role="tab">General</a>
+                <a href="/setup" class="tab" data-tab="setup" role="tab">Live TV Setup</a>
+                <a href="/tasks" class="tab" data-tab="tasks" role="tab">Tasks</a>
             </nav>
 
             <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -155,7 +156,22 @@
                 </div>
             </section>
 
-            <section id="tab-presets" class="tab-panel">
+            <section id="tab-guide" class="tab-panel hidden" hidden>
+                <div class="tv-guide-toolbar">
+                    <button type="button" id="btn-guide-prev" class="emby-button">Earlier</button>
+                    <button type="button" id="btn-guide-now" class="raised button-submit emby-button">Now</button>
+                    <button type="button" id="btn-guide-next" class="emby-button">Later</button>
+                    <label class="inline-field">
+                        <span>Date</span>
+                        <input id="guide-date" type="date" class="emby-input">
+                    </label>
+                    <p id="guide-range-label" class="hint" style="margin:0"></p>
+                </div>
+                <p class="hint">What's on across FinTV channels. Times use the schedule time zone from General. Click a programme for details.</p>
+                <div id="tv-guide" class="tv-guide"></div>
+            </section>
+
+            <section id="tab-presets" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <div class="section-header">
                         <h3>Binarygeek119 Ready-made Channels</h3>
@@ -182,7 +198,7 @@
                 </div>
             </section>
 
-            <section id="tab-lineups" class="tab-panel">
+            <section id="tab-lineups" class="tab-panel hidden" hidden>
                 <div class="toolbar lineup-toolbar">
                     <label class="inline-field">
                         <span>Channel</span>
@@ -211,7 +227,7 @@
                 </div>
             </section>
 
-            <section id="tab-list" class="tab-panel">
+            <section id="tab-list" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <div class="section-header">
                         <h3>FinTV Lists</h3>
@@ -222,7 +238,7 @@
                 </div>
             </section>
 
-            <section id="tab-special" class="tab-panel">
+            <section id="tab-special" class="tab-panel hidden" hidden>
                 <div class="toolbar lineup-toolbar">
                     <label class="inline-field">
                         <span>Channel</span>
@@ -234,7 +250,7 @@
                 <div id="special-list" class="data-table-wrap"></div>
             </section>
 
-            <section id="tab-commercials" class="tab-panel">
+            <section id="tab-commercials" class="tab-panel hidden" hidden>
                 <p>Tag commercial files in Jellyfin with <code>fintv-commercial</code>, or sync YouTube commercials from <a href="https://commercialbrainz.org/" target="_blank" rel="noopener">CommercialBrainz</a>.</p>
                 <div class="toolbar">
                     <button id="btn-sync-commercials" class="emby-button">Sync Jellyfin Library</button>
@@ -320,7 +336,7 @@
                 <div id="commercial-list" class="data-table-wrap"></div>
             </section>
 
-            <section id="tab-logos" class="tab-panel">
+            <section id="tab-logos" class="tab-panel hidden" hidden>
                 <p>Import the <a href="https://github.com/binarygeek119/open-channel-logos/tree/fintv2" target="_blank" rel="noopener">Binarygeek119 Set (fintv2 branch)</a>, or create your own custom logo set.</p>
                 <p class="hint">Channel bugs live under Shows, Movies, and Music Videos Channels. Off-air Emergency Broadcast System slates are configured on the <strong>EBS</strong> tab.</p>
                 <div class="toolbar">
@@ -332,7 +348,7 @@
                 <div id="logo-set-info"></div>
             </section>
 
-            <section id="tab-ebs" class="tab-panel">
+            <section id="tab-ebs" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <h2>Emergency Broadcast System</h2>
                     <p class="hint">EBS plays when a channel has no scheduled media, when playback fails, or when a weather capture error occurs. Pick off-air video and audio independently — for example, color bars with a beep tone, or TV static with white noise.</p>
@@ -410,7 +426,7 @@
                 </div>
             </section>
 
-            <section id="tab-ai" class="tab-panel">
+            <section id="tab-ai" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <h2>AI Lineup Generator</h2>
                     <p id="ai-disabled-note" class="hint hint-warning hidden">AI lineup generation is disabled. Configure API keys below, then enable the switch to generate lineups.</p>
@@ -518,7 +534,7 @@
                 </div>
             </section>
 
-            <section id="tab-weather" class="tab-panel">
+            <section id="tab-weather" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <h3>WeatherStar live channels</h3>
                     <p class="hint">WS4000 and WS3000 run inside FinTV as MPEG-TS channels. The graphics engine stays on loopback only; it is not a public website and does not use Docker sidecars or Playwright.</p>
@@ -561,7 +577,7 @@
                 </div>
             </section>
 
-            <section id="tab-general" class="tab-panel">
+            <section id="tab-general" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <h2>General</h2>
                     <p class="hint">Plugin-wide settings. Debug logging writes extra detail to the Jellyfin server log for troubleshooting AI channel building and playout.</p>
@@ -586,7 +602,7 @@
                 </div>
             </section>
 
-            <section id="tab-setup" class="tab-panel">
+            <section id="tab-setup" class="tab-panel hidden" hidden>
                 <div class="card">
                     <h2>Jellyfin Live TV URLs</h2>
                     <p class="hint">Jellyfin fetches these URLs from the server itself. They must not require login and must use an address Jellyfin can reach (not <code>localhost</code> unless Jellyfin runs on the same machine and resolves it).</p>
@@ -619,7 +635,7 @@
                 </div>
             </section>
 
-            <section id="tab-tasks" class="tab-panel">
+            <section id="tab-tasks" class="tab-panel hidden" hidden>
                 <div class="card">
                     <h2>Maintenance</h2>
                     <p class="hint">Rebuild playout timelines for all enabled channels after bulk lineup changes.</p>
@@ -630,7 +646,7 @@
         </div>
 
         
-            <section id="tab-news" class="tab-panel">
+            <section id="tab-news" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <div class="section-header"><h3>Live news channel</h3></div>
                     <p class="hint">Apply the <strong>FinTV News</strong> preset (or set a channel to content type News). FinTV fetches RSS, scrolls headlines with an ASS overlay, optionally reads them with TTS, and mixes a Jellyfin music bed into a 24/7 MPEG-TS stream.</p>

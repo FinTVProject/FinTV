@@ -51,6 +51,12 @@
     let listNameCache = {};
     let specialPresentations = [];
     let specialChannelId = null;
+    let guideData = null;
+    let guideFromIso = null;
+    let guideDateFilter = null;
+    let guideTimer = null;
+    const GUIDE_HOURS = 6;
+    const GUIDE_PX_PER_MIN = 4;
 
     function $(id) {
         if (configPage) {
@@ -3905,15 +3911,391 @@
         return syncConfigPage();
     }
 
-    function switchTab(name) {
+    function stopGuideClock() {
+        if (guideTimer) {
+            clearInterval(guideTimer);
+            guideTimer = null;
+        }
+    }
+
+    function startGuideClock() {
+        stopGuideClock();
+        positionGuideNowLine();
+        guideTimer = setInterval(positionGuideNowLine, 15000);
+    }
+
+    function guideTimeZone() {
+        return (guideData && guideData.timeZone) || undefined;
+    }
+
+    function formatGuideClock(iso) {
+        try {
+            return new Date(iso).toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit',
+                timeZone: guideTimeZone()
+            });
+        } catch (ignore) {
+            return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        }
+    }
+
+    function formatGuideDate(iso) {
+        try {
+            return new Intl.DateTimeFormat('en-CA', {
+                timeZone: guideTimeZone(),
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).format(new Date(iso));
+        } catch (ignore) {
+            return new Date(iso).toISOString().slice(0, 10);
+        }
+    }
+
+    async function loadGuide() {
+        const root = $('tv-guide');
+        if (!root) {
+            return;
+        }
+
+        root.innerHTML = '<div class="empty-state">Loading guide…</div>';
+        try {
+            const params = new URLSearchParams({ hours: String(GUIDE_HOURS) });
+            if (guideFromIso) {
+                params.set('from', guideFromIso);
+            } else if (guideDateFilter) {
+                params.set('date', guideDateFilter);
+            }
+            guideData = await api('/guide?' + params.toString());
+            guideFromIso = guideData.from;
+            const dateInput = $('guide-date');
+            if (dateInput) {
+                dateInput.value = formatGuideDate(guideData.from);
+            }
+            const range = $('guide-range-label');
+            if (range) {
+                range.textContent = formatGuideClock(guideData.from) + ' – ' + formatGuideClock(guideData.to)
+                    + (guideData.timeZone ? ' · ' + guideData.timeZone : '');
+            }
+            renderGuide();
+            startGuideClock();
+        } catch (err) {
+            reportApiError(err, 'Could not load the TV guide.');
+            root.innerHTML = '<div class="empty-state">Could not load the TV guide.</div>';
+        }
+    }
+
+    function shiftGuide(hours) {
+        if (!guideData || !guideData.from) {
+            return;
+        }
+        const next = new Date(new Date(guideData.from).getTime() + hours * 3600000);
+        guideFromIso = next.toISOString();
+        guideDateFilter = null;
+        loadGuide();
+    }
+
+    function jumpGuideToNow() {
+        guideFromIso = null;
+        guideDateFilter = null;
+        loadGuide();
+    }
+
+    function jumpGuideToDate(date) {
+        guideFromIso = null;
+        guideDateFilter = date || null;
+        loadGuide();
+    }
+
+    function positionGuideNowLine() {
+        if (!guideData) {
+            return;
+        }
+        const from = new Date(guideData.from).getTime();
+        const to = new Date(guideData.to).getTime();
+        const now = Date.now();
+        const inWindow = now >= from && now <= to;
+        const left = ((now - from) / 60000 * GUIDE_PX_PER_MIN) + 'px';
+        qa('.tv-guide-now, .tv-guide-now-bar').forEach((line) => {
+            line.classList.toggle('hidden', !inWindow);
+            if (inWindow) {
+                line.style.left = left;
+            }
+        });
+    }
+
+    function renderGuide() {
+        const root = $('tv-guide');
+        if (!root || !guideData) {
+            return;
+        }
+
+        const channels = guideData.channels || [];
+        const programs = guideData.programs || [];
+        if (!channels.length) {
+            root.innerHTML = '<div class="empty-state">No enabled channels. Create channels first.</div>';
+            return;
+        }
+
+        const from = new Date(guideData.from).getTime();
+        const to = new Date(guideData.to).getTime();
+        const totalMin = Math.max(30, (to - from) / 60000);
+        const width = totalMin * GUIDE_PX_PER_MIN;
+        const byChannel = {};
+        programs.forEach((p) => {
+            const key = p.channelId;
+            if (!byChannel[key]) {
+                byChannel[key] = [];
+            }
+            byChannel[key].push(p);
+        });
+
+        let ticks = '';
+        for (let m = 0; m < totalMin; m += 30) {
+            ticks += '<div class="tv-guide-tick" style="left:' + (m * GUIDE_PX_PER_MIN) + 'px">'
+                + escapeHtml(formatGuideClock(new Date(from + m * 60000).toISOString()))
+                + '</div>';
+        }
+
+        const rows = channels.map((ch) => {
+            const blocks = (byChannel[ch.id] || []).map((p) => {
+                const start = new Date(p.start).getTime();
+                const finish = new Date(p.finish).getTime();
+                const left = Math.max(0, (start - from) / 60000) * GUIDE_PX_PER_MIN;
+                const visibleEnd = Math.min(to, finish);
+                const visibleStart = Math.max(from, start);
+                const w = Math.max(10, (visibleEnd - visibleStart) / 60000 * GUIDE_PX_PER_MIN - 2);
+                const now = Date.now();
+                const isNow = start <= now && finish > now;
+                const type = String(ch.contentType || '').toLowerCase();
+                return '<button type="button" class="tv-guide-block type-' + escapeHtml(type)
+                    + (isNow ? ' is-now' : '') + (p.isVirtual ? ' is-virtual' : '') + '"'
+                    + ' data-program="' + escapeHtml(p.id) + '"'
+                    + ' style="left:' + left + 'px;width:' + w + 'px">'
+                    + '<strong>' + escapeHtml(p.title || 'Untitled') + '</strong>'
+                    + (p.subTitle ? '<span>' + escapeHtml(p.subTitle) + '</span>' : '')
+                    + '</button>';
+            }).join('');
+
+            const logo = ch.logoUrl
+                ? '<img src="' + escapeHtml(ch.logoUrl) + '" alt="" loading="lazy">'
+                : '<span class="tv-guide-logo-fallback"></span>';
+            return '<div class="tv-guide-row">'
+                + '<button type="button" class="tv-guide-channel" data-channel="' + escapeHtml(ch.id) + '">'
+                + logo
+                + '<div><div class="num">' + escapeHtml(ch.number) + '</div>'
+                + '<div class="name">' + escapeHtml(ch.name) + '</div></div>'
+                + '</button>'
+                + '<div class="tv-guide-track" style="width:' + width + 'px"><div class="tv-guide-now-bar"></div>' + blocks + '</div>'
+                + '</div>';
+        }).join('');
+
+        root.innerHTML = '<div class="tv-guide-header">'
+            + '<div class="tv-guide-corner">Channel</div>'
+            + '<div class="tv-guide-times"><div class="tv-guide-times-inner" style="width:' + width + 'px">'
+            + ticks + '<div class="tv-guide-now"></div></div></div>'
+            + '</div>'
+            + '<div class="tv-guide-body">' + rows + '</div>';
+
+        const body = root.querySelector('.tv-guide-body');
+        const times = root.querySelector('.tv-guide-times');
+        if (body && times) {
+            body.addEventListener('scroll', () => { times.scrollLeft = body.scrollLeft; });
+        }
+        root.querySelectorAll('[data-program]').forEach((btn) => {
+            btn.onclick = () => openGuideProgram(btn.dataset.program);
+        });
+        root.querySelectorAll('[data-channel]').forEach((btn) => {
+            btn.onclick = () => {
+                selectedChannelId = btn.dataset.channel;
+                switchTab('lineups');
+            };
+        });
+        positionGuideNowLine();
+    }
+
+    function openGuideProgram(id) {
+        const program = (guideData && guideData.programs || []).find((p) => p.id === id);
+        if (!program) {
+            return;
+        }
+        const channel = (guideData.channels || []).find((c) => c.id === program.channelId);
+        const when = formatGuideClock(program.start) + ' – ' + formatGuideClock(program.finish);
+        const meta = [program.episode, program.year, program.rating, (program.categories || []).join(', ')]
+            .filter(Boolean)
+            .join(' · ');
+        const poster = program.posterUrl
+            ? '<img class="tv-guide-poster" src="' + escapeHtml(program.posterUrl) + '" alt="">'
+            : '';
+        openModal(
+            program.title || 'Programme',
+            poster
+                + '<p class="hint">' + escapeHtml((channel ? channel.number + ' · ' + channel.name + ' · ' : '') + when) + '</p>'
+                + (meta ? '<p class="hint">' + escapeHtml(meta) + '</p>' : '')
+                + (program.subTitle ? '<h4>' + escapeHtml(program.subTitle) + '</h4>' : '')
+                + (program.description ? '<p>' + escapeHtml(program.description) + '</p>' : '<p class="hint">No description.</p>'),
+            '<button type="button" class="emby-button" id="btn-guide-to-lineup">Open lineup</button>'
+                + '<button type="button" class="raised button-submit emby-button" id="btn-guide-close-modal">Close</button>'
+        );
+        const closeBtn = $('btn-guide-close-modal');
+        if (closeBtn) {
+            closeBtn.onclick = closeModal;
+        }
+        const lineupBtn = $('btn-guide-to-lineup');
+        if (lineupBtn) {
+            lineupBtn.onclick = () => {
+                closeModal();
+                selectedChannelId = program.channelId;
+                switchTab('lineups');
+            };
+        }
+    }
+
+    const TAB_PATHS = {
+        guide: '/guide',
+        channels: '/channels',
+        presets: '/presets',
+        lineups: '/lineups',
+        list: '/lists',
+        special: '/special',
+        commercials: '/commercials',
+        logos: '/logos',
+        ebs: '/ebs',
+        ai: '/ai',
+        weather: '/weather',
+        news: '/news',
+        general: '/general',
+        setup: '/setup',
+        tasks: '/tasks'
+    };
+
+    const TAB_TITLES = {
+        guide: 'TV Guide',
+        channels: 'Channels',
+        presets: 'Presets',
+        lineups: 'Lineups',
+        list: 'Lists',
+        special: 'Special Presentation',
+        commercials: 'Commercials',
+        logos: 'Logo Sets',
+        ebs: 'EBS',
+        ai: 'AI',
+        weather: 'Weather',
+        news: 'News',
+        general: 'General',
+        setup: 'Live TV Setup',
+        tasks: 'Tasks'
+    };
+
+    const TAB_SUBTITLES = {
+        guide: 'What\'s on now across FinTV channels',
+        channels: 'Manage Live TV channels',
+        presets: 'Create the Binarygeek119 ready-made lineup',
+        lineups: 'Edit 24-hour schedules and playout',
+        list: 'Register Jellyfin playlists as FinTV lists',
+        special: 'Recurring blocks that override the normal lineup',
+        commercials: 'Jellyfin and CommercialBrainz ad pools',
+        logos: 'Channel bugs and logo sets',
+        ebs: 'Off-air Emergency Broadcast System',
+        ai: 'AI lineup generation and tagging',
+        weather: 'WeatherStar live channels',
+        news: 'Live RSS news channel',
+        general: 'Server-wide FinTV settings',
+        setup: 'Jellyfin Live TV tuner and guide URLs',
+        tasks: 'Rebuild playouts and maintenance'
+    };
+
+    function normalizePathname(pathname) {
+        let path = String(pathname || '/').split('?')[0];
+        if (path.length > 1) {
+            path = path.replace(/\/+$/, '');
+        }
+        return path || '/';
+    }
+
+    function tabFromPath(pathname) {
+        const path = normalizePathname(pathname);
+        if (path === '/' || path === '/index.html' || path === '/login') {
+            return 'channels';
+        }
+
+        for (const name of Object.keys(TAB_PATHS)) {
+            if (TAB_PATHS[name] === path) {
+                return name;
+            }
+        }
+
+        if (path === '/list') {
+            return 'list';
+        }
+
+        return 'channels';
+    }
+
+    function isModifiedClick(event) {
+        return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
+    }
+
+    function onTabLinkClick(event) {
+        const link = event.target.closest('a[data-tab]');
+        if (!link || isModifiedClick(event) || !TAB_PATHS[link.dataset.tab]) {
+            return;
+        }
+
+        event.preventDefault();
+        switchTab(link.dataset.tab);
+    }
+
+    let tabRoutesBound = false;
+
+    function bindTabRoutes() {
+        if (tabRoutesBound) {
+            return;
+        }
+
+        tabRoutesBound = true;
+        document.addEventListener('click', onTabLinkClick);
+        window.addEventListener('popstate', () => {
+            switchTab(tabFromPath(location.pathname), { skipHistory: true });
+        });
+    }
+
+    function applyTabFromLocation() {
+        const path = normalizePathname(location.pathname);
+        if (path === '/login') {
+            return;
+        }
+
+        const tab = tabFromPath(path);
+        switchTab(tab, { skipHistory: true });
+        const app = document.getElementById('app-shell');
+        if (app && !app.classList.contains('hidden') && (path === '/' || path === '/index.html')) {
+            history.replaceState({ tab }, '', TAB_PATHS[tab]);
+        }
+    }
+
+    function switchTab(name, options) {
+        options = options || {};
+        if (!TAB_PATHS[name]) {
+            name = 'channels';
+        }
+
         if (!syncConfigPage()) {
             return;
         }
 
         qa('.fintv-tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
-        qa('.tab-panel').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
+        document.querySelectorAll('.tab-panel').forEach((p) => {
+            const on = p.id === 'tab-' + name;
+            p.classList.toggle('active', on);
+            p.classList.toggle('hidden', !on);
+            p.hidden = !on;
+        });
         stopOnAirPolling();
+        stopGuideClock();
         if (name === 'channels') startOnAirPolling();
+        if (name === 'guide') loadGuide();
         if (name === 'setup') loadSetup();
         if (name === 'general') loadGeneral();
         if (name === 'ebs') loadEbs();
@@ -3926,6 +4308,16 @@
         if (name === 'special') loadSpecialPresentations();
         if (name === 'commercials') loadCommercials();
         if (name === 'logos') loadLogos();
+
+        const path = TAB_PATHS[name];
+        if (!options.skipHistory && normalizePathname(location.pathname) !== path) {
+            history.pushState({ tab: name }, '', path);
+        }
+
+        document.title = (TAB_TITLES[name] || name) + ' · FinTV';
+        window.dispatchEvent(new CustomEvent('fintv-tabchange', {
+            detail: { tab: name, title: TAB_TITLES[name], subtitle: TAB_SUBTITLES[name] }
+        }));
     }
 
     function copyText(elementId) {
@@ -3994,7 +4386,11 @@
             }
         }
 
-        qa('.fintv-tabs .tab').forEach((tab) => tab.onclick = () => switchTab(tab.dataset.tab));
+        bindTabRoutes();
+        click('btn-guide-prev', () => shiftGuide(-3));
+        click('btn-guide-next', () => shiftGuide(3));
+        click('btn-guide-now', () => jumpGuideToNow());
+        change('guide-date', (e) => jumpGuideToDate(e.target.value));
         click('btn-new-channel', () => openNewChannelForm());
         click('btn-close-channel', () => showChannelForm(false));
         click('btn-cancel-channel', () => showChannelForm(false));
@@ -4098,7 +4494,7 @@
         }
 
         bindEvents();
-        startOnAirPolling();
+        applyTabFromLocation();
         return refresh().catch((err) => reportApiError(err, 'Could not load FinTV admin.'));
     }
 
@@ -4133,8 +4529,7 @@
         return true;
     }
 
-    window.FinTV = { init, refresh, loadChannels, loadSetup, bootFinTvAdmin };
-})();
+    window.FinTV = { init, refresh, loadChannels, loadSetup, bootFinTvAdmin, switchTab, tabFromPath };
 
     document.addEventListener('DOMContentLoaded', function () {
         const page = document.getElementById('FinTVConfigPage');
