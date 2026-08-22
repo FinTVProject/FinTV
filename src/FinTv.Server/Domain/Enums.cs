@@ -162,3 +162,13 @@ public enum ChannelCatalogMode
     Mixed = 2,
     MusicVideoOnly = 3
 }
+
+/// <summary>
+/// How NWS weather alerts appear on non-weather channels.
+/// </summary>
+public enum WeatherAlertOverlayMode
+{
+    Off = 0,
+    CutIn = 1,
+    Ticker = 2
+}

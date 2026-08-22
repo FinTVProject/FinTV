@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using FinTv.Data;
 using FinTv.Domain;
@@ -9,10 +10,14 @@ using Microsoft.Extensions.Logging;
 
 namespace FinTv.News;
 
-public sealed record NewsArticle(string Title, string Summary, string? FeedName);
+public sealed record NewsArticle(string Title, string Summary, string? FeedName, string? ImageUrl = null);
 
 public sealed class NewsHeadlineService
 {
+    private static readonly Regex ImgSrc = new(
+        @"<img\b[^>]*?\bsrc\s*=\s*(?:""(?<url>[^""]+)""|'(?<url>[^']+)'|(?<url>[^\s>]+))",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     private readonly IServiceScopeFactory _scopes;
     private readonly IHttpClientFactory _http;
     private readonly ILogger<NewsHeadlineService> _logger;
@@ -99,10 +104,17 @@ public sealed class NewsHeadlineService
                         continue;
                     }
 
-                    var summary = Clean(item.Element("description")?.Value
-                        ?? item.Elements().FirstOrDefault(e => e.Name.LocalName == "summary")?.Value
-                        ?? item.Elements().FirstOrDefault(e => e.Name.LocalName == "content")?.Value);
-                    articles.Add(new NewsArticle(title, summary, feed.Name));
+                    var rawSummary = item.Element("description")?.Value
+                        ?? item.Elements().FirstOrDefault(e => e.Name.LocalName is "summary" or "content" or "encoded")?.Value;
+                    var summary = Clean(rawSummary);
+                    var html = string.Join(
+                        " ",
+                        item.Elements()
+                            .Where(e => e.Name.LocalName is "description" or "summary" or "content" or "encoded")
+                            .Select(e => e.Value)
+                            .Where(v => !string.IsNullOrWhiteSpace(v)));
+                    var imageUrl = ReadImageUrl(item, feed.Url, html);
+                    articles.Add(new NewsArticle(title, summary, feed.Name, imageUrl));
                     if (articles.Count >= limit)
                     {
                         return articles;
@@ -116,6 +128,135 @@ public sealed class NewsHeadlineService
         }
 
         return articles;
+    }
+
+    internal static string? ReadImageUrl(XElement item, string feedUrl, string? html)
+    {
+        foreach (var enclosure in item.Elements().Where(e => e.Name.LocalName == "enclosure"))
+        {
+            var url = ResolveUrl(Attr(enclosure, "url"), feedUrl);
+            if (LooksLikeImage(url, Attr(enclosure, "type")))
+            {
+                return url;
+            }
+        }
+
+        foreach (var media in item.Descendants().Where(e => e.Name.LocalName is "content" or "thumbnail" or "image"))
+        {
+            if (media.Name.LocalName == "content"
+                && string.IsNullOrWhiteSpace(Attr(media, "url"))
+                && string.IsNullOrWhiteSpace(Attr(media, "href"))
+                && !string.IsNullOrWhiteSpace(media.Value)
+                && media.Value.Contains('<'))
+            {
+                continue;
+            }
+
+            var medium = Attr(media, "medium");
+            if (medium is "video" or "audio")
+            {
+                continue;
+            }
+
+            var url = ResolveUrl(Attr(media, "url") ?? Attr(media, "href"), feedUrl);
+            if (media.Name.LocalName is "thumbnail" or "image" && !string.IsNullOrWhiteSpace(url)
+                && (string.IsNullOrWhiteSpace(medium) || medium == "image"))
+            {
+                return url;
+            }
+
+            if (medium == "image" && !string.IsNullOrWhiteSpace(url))
+            {
+                return url;
+            }
+
+            if (LooksLikeImage(url, Attr(media, "type")))
+            {
+                return url;
+            }
+
+            var nested = media.Elements().FirstOrDefault(e => e.Name.LocalName == "url")?.Value;
+            url = ResolveUrl(nested, feedUrl);
+            if (LooksLikeImage(url, null))
+            {
+                return url;
+            }
+        }
+
+        foreach (var link in item.Elements().Where(e => e.Name.LocalName == "link"))
+        {
+            var rel = Attr(link, "rel");
+            var href = ResolveUrl(Attr(link, "href") ?? link.Value, feedUrl);
+            if (rel is "enclosure" or "preview" or "image" && LooksLikeImage(href, Attr(link, "type")))
+            {
+                return href;
+            }
+        }
+
+        var img = ImgSrc.Match(html ?? "");
+        return img.Success ? ResolveUrl(img.Groups["url"].Value, feedUrl) : null;
+    }
+
+    private static string? Attr(XElement el, string name)
+        => el.Attributes().FirstOrDefault(a => string.Equals(a.Name.LocalName, name, StringComparison.OrdinalIgnoreCase))?.Value;
+
+    private static string? ResolveUrl(string? raw, string feedUrl)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var value = WebUtility.HtmlDecode(raw.Trim());
+        if (value.StartsWith("//", StringComparison.Ordinal))
+        {
+            value = "https:" + value;
+        }
+
+        if (Uri.TryCreate(value, UriKind.Absolute, out var abs)
+            && (abs.Scheme == Uri.UriSchemeHttp || abs.Scheme == Uri.UriSchemeHttps))
+        {
+            return abs.ToString();
+        }
+
+        if (Uri.TryCreate(feedUrl, UriKind.Absolute, out var feed)
+            && Uri.TryCreate(feed, value, out var combined)
+            && (combined.Scheme == Uri.UriSchemeHttp || combined.Scheme == Uri.UriSchemeHttps))
+        {
+            return combined.ToString();
+        }
+
+        return null;
+    }
+
+    private static bool LooksLikeImage(string? url, string? type)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            if (type.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+                && !type.Contains("svg", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (type.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
+                || type.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        var path = url.Split('?', 2)[0];
+        return path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Clean(string? value)

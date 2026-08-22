@@ -3599,6 +3599,17 @@
         if ($('weather-auto-wide-169')) {
             $('weather-auto-wide-169').checked = status?.weatherStarAutoWideForSixteenNine !== false;
         }
+        if ($('weather-alert-overlay-mode')) {
+            const mode = status?.weatherAlertOverlayMode || 'off';
+            $('weather-alert-overlay-mode').value = ['off', 'cutin', 'ticker'].includes(mode) ? mode : 'off';
+        }
+        if ($('weather-alert-cutin-interval')) {
+            $('weather-alert-cutin-interval').value = String(status?.weatherAlertCutInIntervalMinutes || 15);
+        }
+        if ($('weather-alert-cutin-duration')) {
+            $('weather-alert-cutin-duration').value = String(status?.weatherAlertCutInDurationSeconds || 20);
+        }
+        toggleWeatherAlertCutInFields();
     }
 
     const WEATHER_SCREEN_KEYS = [
@@ -3688,6 +3699,14 @@
         return params.toString();
     }
 
+    function toggleWeatherAlertCutInFields() {
+        const fields = $('weather-alert-cutin-fields');
+        if (!fields) {
+            return;
+        }
+        fields.classList.toggle('hidden', ($('weather-alert-overlay-mode')?.value || 'off') !== 'cutin');
+    }
+
     function renderWeatherZipList(rows) {
         const el = $('weather-zip-list');
         if (!el) {
@@ -3739,6 +3758,9 @@
                     weatherMusicLibraryId: musicSelect?.value || '',
                     weatherMusicLibraryName: selected && selected.value ? selected.textContent : '',
                     defaultLocation,
+                    weatherAlertOverlayMode: $('weather-alert-overlay-mode')?.value || 'off',
+                    weatherAlertCutInIntervalMinutes: Number($('weather-alert-cutin-interval')?.value || 15),
+                    weatherAlertCutInDurationSeconds: Number($('weather-alert-cutin-duration')?.value || 20),
                     channels: channelZips
                 })
             });
@@ -3907,7 +3929,7 @@
         if (box) {
             const articles = data.articles || [];
             box.innerHTML = articles.length
-                ? articles.map((a) => `<article class="news-preview-item"><h4>${escapeHtml(a.title)}</h4><p>${escapeHtml(a.summary || '')}</p></article>`).join('')
+                ? articles.map((a) => `<article class="news-preview-item">${a.imageUrl ? `<img class="news-preview-thumb" src="${escapeHtml(a.imageUrl)}" alt="" referrerpolicy="no-referrer">` : ''}<div><h4>${escapeHtml(a.title)}</h4><p>${escapeHtml(a.summary || '')}</p></div></article>`).join('')
                 : '<p class="hint">No headlines. Add an enabled RSS URL and refresh.</p>';
         }
     }
@@ -5487,6 +5509,7 @@
         click('btn-remove-ebs-international', () => removeEbsSlate('international'));
         click('btn-save-weather', saveWeatherSettings);
         click('btn-save-weather-source', saveWeatherSettings);
+        change('weather-alert-overlay-mode', toggleWeatherAlertCutInFields);
         click('btn-save-news', () => saveNewsSettings().catch((e) => toast(e.message, 'error')));
         change('news-no-music', syncNewsMusicUi);
         click('btn-save-transcode', () => saveTranscodeSettings().catch((e) => toast(e.message, 'error')));

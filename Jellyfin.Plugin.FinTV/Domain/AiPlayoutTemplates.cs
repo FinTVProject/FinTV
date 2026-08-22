@@ -155,12 +155,12 @@ public static class AiPlayoutTemplates
         new AiPlayoutTemplate
         {
             Id = "past-tense-news",
-            Name = "Past Tense News · Breaking Chronology",
-            Description = "124.1 Past Tense News: chronological event order presented as live breaking coverage.",
+            Name = "Past Tense News · Breaking Shuffle",
+            Description = "124.1 Past Tense News: random home-movie clips presented as live breaking coverage.",
             Dayparts =
             [
-                new AiPlayoutDaypart(0, 47, "Chronological News Day",
-                    "Order news clips by the historical timeline of the events they cover — earliest events in morning slots, progressing through the day. Present every story as if it is breaking live right now, not archival footage. Group all coverage of the same event consecutively before advancing to the next historical moment. Match spanSlots to segment length; typical news blocks are 30-60 minutes.", maxSpanSlots: 4)
+                new AiPlayoutDaypart(0, 47, "Breaking News Day",
+                    "Fill every slot with random clips from the Past Tense News library. Do not keep chronological order. Present every story as if it is breaking live right now. Match spanSlots to clip length; pack multiple short clips into a 30-minute block.", maxSpanSlots: 2)
             ]
         },
         new AiPlayoutTemplate

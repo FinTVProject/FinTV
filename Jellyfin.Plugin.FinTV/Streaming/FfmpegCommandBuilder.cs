@@ -19,12 +19,13 @@ public class FfmpegCommandBuilder
         string inputPath,
         double startSeconds,
         double durationSeconds,
-        string? bugImagePath)
+        string? bugImagePath,
+        string? overlayHeadline = null)
     {
         var (width, height) = GetResolution(channel);
         var context = CreateEncodingContext(width, height, inputPath);
         var vf = _encoding.AdaptVideoFilterForEncoder(
-            BuildVideoFilterChain(channel, width, height, bugImagePath),
+            BuildVideoFilterChain(channel, width, height, bugImagePath, overlayHeadline),
             context.Encoder);
 
         var args = new List<string>
@@ -65,7 +66,7 @@ public class FfmpegCommandBuilder
         var (width, height) = GetResolution(channel);
         var context = CreateEncodingContext(width, height, inputPath);
         var vf = _encoding.AdaptVideoFilterForEncoder(
-            BuildVideoFilterChain(channel, width, height, bugImagePath),
+            BuildVideoFilterChain(channel, width, height, bugImagePath, overlayHeadline: null),
             context.Encoder);
         var isRemoteInput = inputPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
             || inputPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
@@ -561,7 +562,12 @@ public class FfmpegCommandBuilder
         args.AddRange(_encoding.GetVideoEncoderArguments(context.State, context.Options, context.Encoder, stillImage));
     }
 
-    private static string BuildVideoFilterChain(Channel channel, int width, int height, string? bugImagePath)
+    private static string BuildVideoFilterChain(
+        Channel channel,
+        int width,
+        int height,
+        string? bugImagePath,
+        string? overlayHeadline)
     {
         var filters = new List<string>
         {
@@ -574,6 +580,12 @@ public class FfmpegCommandBuilder
             filters.Add("format=yuv420p,geq=lum='if(not(mod(Y,4)),lum(X,Y)*0.82,lum(X,Y))'");
         }
 
+        var newsOverlay = IsPastTenseNewsChannel(channel);
+        if (newsOverlay)
+        {
+            AppendPastTenseNewsOverlay(filters, width, height, overlayHeadline);
+        }
+
         var bug = channel.BugPlacement == BugPlacementMode.None
             ? null
             : (!string.IsNullOrWhiteSpace(bugImagePath) && File.Exists(bugImagePath)
@@ -582,11 +594,52 @@ public class FfmpegCommandBuilder
         if (!string.IsNullOrWhiteSpace(bug) && File.Exists(bug))
         {
             var overlay = GetBugOverlay(channel, width, height);
+            if (newsOverlay)
+            {
+                return $"{string.Join(',', filters)}[v];movie={EscapeMovie(bug)}[bug];[v][bug]overlay={overlay}";
+            }
+
             filters.Add($"movie={EscapeMovie(bug)}[bug];[in][bug]overlay={overlay}[out]");
             return string.Join(',', filters).Replace("[in]", "[0:v]").Replace("[out]", string.Empty);
         }
 
         return string.Join(',', filters);
+    }
+
+    private static bool IsPastTenseNewsChannel(Channel channel)
+        => FilterDefinition.PresetIdsEqual(
+            ChannelAiRules.ExtractLibraryTag(channel.FilterJson),
+            "channelflow-past-tense-news");
+
+    private static void AppendPastTenseNewsOverlay(List<string> filters, int width, int height, string? headline)
+    {
+        _ = width;
+        var barH = Math.Max(52, height / 18);
+        var lowerH = Math.Max(92, height / 11);
+        var font = Math.Max(24, height / 38);
+        var small = Math.Max(16, height / 50);
+        filters.Add($"drawbox=x=0:y=0:w=iw:h={barH}:color=0xe11d48@0.92:t=fill");
+        filters.Add($"drawtext=text='BREAKING NEWS':expansion=none:fontcolor=white:fontsize={font}:x=28:y=({barH}-th)/2");
+        filters.Add($"drawbox=x=0:y=h-{lowerH}:w=iw:h={lowerH}:color=0x101010@0.90:t=fill");
+        filters.Add($"drawtext=text='PAST TENSE NEWS':expansion=none:fontcolor=0xe11d48:fontsize={small}:x=28:y=h-{lowerH}+10");
+        if (string.IsNullOrWhiteSpace(headline))
+        {
+            return;
+        }
+
+        var title = TruncateForDrawText(headline, 72);
+        filters.Add($"drawtext=text='{EscapeDrawText(title)}':expansion=none:fontcolor=white:fontsize={font}:x=28:y=h-{lowerH}+{small + 18}");
+    }
+
+    private static string TruncateForDrawText(string text, int maxChars)
+    {
+        var trimmed = text.Trim().Replace('\n', ' ').Replace('\r', ' ');
+        if (trimmed.Length <= maxChars)
+        {
+            return trimmed;
+        }
+
+        return trimmed[..Math.Max(1, maxChars - 1)].TrimEnd() + "…";
     }
 
     private static string BuildMusicFilter(int width, int height, string? logoPath, string? albumArtPath, bool scanlines)
@@ -668,5 +721,9 @@ public class FfmpegCommandBuilder
 
     private static string EscapeMovie(string path) => path.Replace("\\", "/").Replace(":", "\\:");
 
-    private static string EscapeDrawText(string text) => text.Replace("'", "\\'");
+    private static string EscapeDrawText(string text)
+        => text.Replace("\\", "\\\\")
+            .Replace("'", "\u2019")
+            .Replace(":", "\\:")
+            .Replace("%", "\\%");
 }

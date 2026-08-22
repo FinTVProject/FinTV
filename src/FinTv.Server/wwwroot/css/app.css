@@ -122,9 +122,10 @@ input, select, textarea {
     align-items: center;
     margin-bottom: 0.5rem;
 }
-.news-preview-item { margin: 0 0 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+.news-preview-item { display: flex; gap: 0.75rem; align-items: flex-start; margin: 0 0 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
 .news-preview-item h4 { margin: 0 0 0.35rem; color: var(--accent); }
 .news-preview-item p { margin: 0; color: var(--muted); }
+.news-preview-thumb { width: 96px; height: 72px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: #1a1a1a; }
 
 .tv-guide-toolbar { display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: end; margin-bottom: 0.75rem; }
 .tv-guide { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: #141414; }

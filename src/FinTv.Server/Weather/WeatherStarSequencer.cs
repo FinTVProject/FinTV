@@ -14,7 +14,9 @@ public sealed class WeatherStarSequencer
         string? permalinkQuery,
         WeatherStarDockerVariant skin,
         bool wide,
-        bool channelScanlines)
+        bool channelScanlines,
+        bool hasAlerts = true,
+        int localForecastPages = 1)
     {
         Skin = skin;
         Wide = wide;
@@ -28,12 +30,24 @@ public sealed class WeatherStarSequencer
 
         _screenDuration = TimeSpan.FromSeconds(10 * speed);
         var screens = new List<WeatherStarScreen>();
-        Add(screens, flags, "hazards", WeatherStarScreen.Hazards);
+        if (hasAlerts)
+        {
+            Add(screens, flags, "hazards", WeatherStarScreen.Hazards);
+        }
+
         Add(screens, flags, "current-weather", WeatherStarScreen.Current);
         Add(screens, flags, "latest-observations", WeatherStarScreen.Observations);
         Add(screens, flags, "hourly", WeatherStarScreen.Hourly);
         Add(screens, flags, "hourly-graph", WeatherStarScreen.HourlyGraph);
-        Add(screens, flags, "local-forecast", WeatherStarScreen.LocalForecast);
+        if (Flag(flags, "local-forecast", true))
+        {
+            var pages = Math.Clamp(localForecastPages, 1, 6);
+            for (var i = 0; i < pages; i++)
+            {
+                screens.Add(WeatherStarScreen.LocalForecast);
+            }
+        }
+
         Add(screens, flags, "extended-forecast", WeatherStarScreen.ExtendedForecast);
         Add(screens, flags, "regional-forecast", WeatherStarScreen.Regional);
         Add(screens, flags, "travel", WeatherStarScreen.Travel);
@@ -45,11 +59,11 @@ public sealed class WeatherStarSequencer
 
     public bool Scanlines => _scanlines;
 
-    public (WeatherStarScreen Screen, int RadarIndex) At(TimeSpan elapsed)
+    public (WeatherStarScreen Screen, int RadarIndex, int Repeat) At(TimeSpan elapsed)
     {
         if (_screens.Count == 0)
         {
-            return (WeatherStarScreen.Current, 0);
+            return (WeatherStarScreen.Current, 0, 0);
         }
 
         var cycle = _screenDuration.TotalMilliseconds * _screens.Count;
@@ -63,7 +77,16 @@ public sealed class WeatherStarSequencer
         var screen = _screens[index];
         var within = pos - index * _screenDuration.TotalMilliseconds;
         var radarIndex = (int)(within / 400);
-        return (screen, radarIndex);
+        var repeat = 0;
+        for (var i = 0; i < index; i++)
+        {
+            if (_screens[i] == screen)
+            {
+                repeat++;
+            }
+        }
+
+        return (screen, radarIndex, repeat);
     }
 
     private static void Add(List<WeatherStarScreen> screens, Dictionary<string, string> flags, string key, WeatherStarScreen screen)

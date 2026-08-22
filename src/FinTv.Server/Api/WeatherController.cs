@@ -61,6 +61,10 @@ public class WeatherController : ControllerBase
             weatherMusicLibraryName = config?.WeatherMusicLibraryName,
             weatherDefaultLocationQuery = config?.WeatherDefaultLocationQuery
                 ?? WeatherStarChannelService.ResolveDefaultLocationQuery(),
+            weatherAlertOverlayMode = WeatherAlertOverlayService.FormatMode(
+                WeatherAlertOverlayService.ParseMode(config?.WeatherAlertOverlayMode)),
+            weatherAlertCutInIntervalMinutes = Math.Clamp(config?.WeatherAlertCutInIntervalMinutes ?? 15, 1, 180),
+            weatherAlertCutInDurationSeconds = Math.Clamp(config?.WeatherAlertCutInDurationSeconds ?? 20, 5, 120),
             weatherChannels,
             musicLibraries,
             publicSite = false,
@@ -128,6 +132,24 @@ public class WeatherController : ControllerBase
             }
         }
 
+        if (request.WeatherAlertOverlayMode is not null)
+        {
+            plugin.Configuration.WeatherAlertOverlayMode = WeatherAlertOverlayService.FormatMode(
+                WeatherAlertOverlayService.ParseMode(request.WeatherAlertOverlayMode));
+        }
+
+        if (request.WeatherAlertCutInIntervalMinutes.HasValue)
+        {
+            plugin.Configuration.WeatherAlertCutInIntervalMinutes =
+                Math.Clamp(request.WeatherAlertCutInIntervalMinutes.Value, 1, 180);
+        }
+
+        if (request.WeatherAlertCutInDurationSeconds.HasValue)
+        {
+            plugin.Configuration.WeatherAlertCutInDurationSeconds =
+                Math.Clamp(request.WeatherAlertCutInDurationSeconds.Value, 5, 120);
+        }
+
         if (request.Channels is not null)
         {
             foreach (var row in request.Channels)
@@ -182,6 +204,12 @@ public class WeatherSettingsRequest
     public string? DefaultZip { get; set; }
 
     public string? DefaultLocation { get; set; }
+
+    public string? WeatherAlertOverlayMode { get; set; }
+
+    public int? WeatherAlertCutInIntervalMinutes { get; set; }
+
+    public int? WeatherAlertCutInDurationSeconds { get; set; }
 
     public List<WeatherChannelLocationRequest>? Channels { get; set; }
 }

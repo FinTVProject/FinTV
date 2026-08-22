@@ -23,7 +23,7 @@ public static class ChannelAiRules
             ChannelCatalogMode.Mixed),
         ["channelflow-news"] = new("News programming only (News genre preferred).", ChannelCatalogMode.TvOnly),
         ["channelflow-past-tense-news"] = new(
-            "Home movies and home videos (Jellyfin Home Movies / Home Videos / Past Tense News libraries). Schedule clips in chronological order of the events they cover and treat each story as breaking live news.",
+            "Home movies and home videos from the Past Tense News / Home Movies / Home Videos library. Shuffle clips at random and present every clip as live breaking news.",
             ChannelCatalogMode.Mixed),
         ["channelflow-crime"] = new(
             "Crime and cop themed TV shows and movies. Match Crime/Cop/Police/Detective genres or crime-related plot/overview text. Exclude animated comedies, game shows, and spy-comedy series that only mention CIA/FBI without crime themes.",

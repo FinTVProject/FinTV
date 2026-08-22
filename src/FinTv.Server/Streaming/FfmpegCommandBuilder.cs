@@ -16,12 +16,14 @@ public class FfmpegCommandBuilder
         string inputPath,
         double startSeconds,
         double durationSeconds,
-        string? bugImagePath)
+        string? bugImagePath,
+        string? overlayHeadline = null,
+        string? alertTickerPath = null)
     {
         var (width, height) = GetResolution(channel);
         var context = CreateEncodingContext(width, height, inputPath);
         var vf = _encoding.AdaptVideoFilterForEncoder(
-            BuildVideoFilterChain(channel, width, height, bugImagePath),
+            BuildVideoFilterChain(channel, width, height, bugImagePath, overlayHeadline, alertTickerPath),
             context.Encoder);
 
         var args = new List<string>
@@ -63,7 +65,7 @@ public class FfmpegCommandBuilder
         var (width, height) = GetResolution(channel);
         var context = CreateEncodingContext(width, height, inputPath);
         var vf = _encoding.AdaptVideoFilterForEncoder(
-            BuildVideoFilterChain(channel, width, height, bugImagePath),
+            BuildVideoFilterChain(channel, width, height, bugImagePath, overlayHeadline: null, alertTickerPath: null),
             context.Encoder);
         var isRemoteInput = inputPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
             || inputPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
@@ -115,13 +117,14 @@ public class FfmpegCommandBuilder
     public IReadOnlyList<string> BuildMusicCommand(
         Channel channel,
         string audioPath,
-        string? albumArtPath)
+        string? albumArtPath,
+        string? alertTickerPath = null)
     {
         var (width, height) = GetResolution(channel);
         var context = CreateEncodingContext(width, height, audioPath);
         var logo = channel.BugPlacement == BugPlacementMode.None ? null : ResolveBugPath(channel);
         var filter = _encoding.AdaptFilterComplexForEncoder(
-            BuildMusicFilter(width, height, logo, albumArtPath, channel.ScanlinesEnabled && channel.AspectRatio == AspectRatioMode.FourThree),
+            BuildMusicFilter(width, height, logo, albumArtPath, channel.ScanlinesEnabled && channel.AspectRatio == AspectRatioMode.FourThree, alertTickerPath),
             context.Encoder);
 
         var args = new List<string>
@@ -441,7 +444,8 @@ public class FfmpegCommandBuilder
         int width,
         int height,
         double captureFps,
-        string? audioPath)
+        string? audioPath,
+        double? durationSeconds = null)
     {
         var fps = captureFps.ToString(CultureInfo.InvariantCulture);
         var hasAudio = !string.IsNullOrWhiteSpace(audioPath) && File.Exists(audioPath);
@@ -495,7 +499,16 @@ public class FfmpegCommandBuilder
             "-c:a", "aac",
             "-b:a", "192k",
             "-ac", "2",
-            "-ar", "48000",
+            "-ar", "48000"
+        });
+        if (durationSeconds is > 0)
+        {
+            args.Add("-t");
+            args.Add(durationSeconds.Value.ToString("F3", CultureInfo.InvariantCulture));
+        }
+
+        args.AddRange(new[]
+        {
             "-f", "mpegts",
             "-mpegts_flags", "+resend_headers+initial_discontinuity",
             "-flush_packets", "1",
@@ -568,7 +581,13 @@ public class FfmpegCommandBuilder
         args.AddRange(_encoding.GetVideoEncoderArguments(stillImage));
     }
 
-    private static string BuildVideoFilterChain(Channel channel, int width, int height, string? bugImagePath)
+    private static string BuildVideoFilterChain(
+        Channel channel,
+        int width,
+        int height,
+        string? bugImagePath,
+        string? overlayHeadline,
+        string? alertTickerPath)
     {
         var filters = new List<string>
         {
@@ -581,6 +600,14 @@ public class FfmpegCommandBuilder
             filters.Add("format=yuv420p,geq=lum='if(not(mod(Y,4)),lum(X,Y)*0.82,lum(X,Y))'");
         }
 
+        var newsOverlay = PastTenseNewsCatalog.IsPastTenseNewsChannel(channel);
+        if (newsOverlay)
+        {
+            AppendPastTenseNewsOverlay(filters, width, height, overlayHeadline);
+        }
+
+        AppendWeatherAlertTicker(filters, height, alertTickerPath);
+
         var bug = channel.BugPlacement == BugPlacementMode.None
             ? null
             : (!string.IsNullOrWhiteSpace(bugImagePath) && File.Exists(bugImagePath)
@@ -589,6 +616,11 @@ public class FfmpegCommandBuilder
         if (!string.IsNullOrWhiteSpace(bug) && File.Exists(bug))
         {
             var overlay = GetBugOverlay(channel, width, height);
+            if (newsOverlay || HasAlertTicker(alertTickerPath))
+            {
+                return $"{string.Join(',', filters)}[v];movie={EscapeMovie(bug)}[bug];[v][bug]overlay={overlay}";
+            }
+
             filters.Add($"movie={EscapeMovie(bug)}[bug];[in][bug]overlay={overlay}[out]");
             return string.Join(',', filters).Replace("[in]", "[0:v]").Replace("[out]", string.Empty);
         }
@@ -596,7 +628,55 @@ public class FfmpegCommandBuilder
         return string.Join(',', filters);
     }
 
-    private static string BuildMusicFilter(int width, int height, string? logoPath, string? albumArtPath, bool scanlines)
+    private static void AppendPastTenseNewsOverlay(List<string> filters, int width, int height, string? headline)
+    {
+        _ = width;
+        var barH = Math.Max(52, height / 18);
+        var lowerH = Math.Max(92, height / 11);
+        var font = Math.Max(24, height / 38);
+        var small = Math.Max(16, height / 50);
+        filters.Add($"drawbox=x=0:y=0:w=iw:h={barH}:color=0xe11d48@0.92:t=fill");
+        filters.Add($"drawtext=text='BREAKING NEWS':expansion=none:fontcolor=white:fontsize={font}:x=28:y=({barH}-th)/2");
+        filters.Add($"drawbox=x=0:y=h-{lowerH}:w=iw:h={lowerH}:color=0x101010@0.90:t=fill");
+        filters.Add($"drawtext=text='PAST TENSE NEWS':expansion=none:fontcolor=0xe11d48:fontsize={small}:x=28:y=h-{lowerH}+10");
+        if (string.IsNullOrWhiteSpace(headline))
+        {
+            return;
+        }
+
+        var title = TruncateForDrawText(headline, 72);
+        filters.Add($"drawtext=text='{EscapeDrawText(title)}':expansion=none:fontcolor=white:fontsize={font}:x=28:y=h-{lowerH}+{small + 18}");
+    }
+
+    private static bool HasAlertTicker(string? alertTickerPath)
+        => !string.IsNullOrWhiteSpace(alertTickerPath) && File.Exists(alertTickerPath);
+
+    private static void AppendWeatherAlertTicker(List<string> filters, int height, string? alertTickerPath)
+    {
+        if (!HasAlertTicker(alertTickerPath))
+        {
+            return;
+        }
+
+        var barH = Math.Max(52, height / 18);
+        var font = Math.Max(22, height / 42);
+        var escaped = EscapeFilterPath(alertTickerPath!);
+        filters.Add($"drawbox=x=0:y=h-{barH}:w=iw:h={barH}:color=0xc41e3a@0.90:t=fill");
+        filters.Add($"drawtext=textfile='{escaped}':expansion=none:fontcolor=white:fontsize={font}:x=w-mod(t*90\\,w+text_w):y=h-{barH}+{(barH - font) / 2}");
+    }
+
+    private static string TruncateForDrawText(string text, int maxChars)
+    {
+        var trimmed = text.Trim().Replace('\n', ' ').Replace('\r', ' ');
+        if (trimmed.Length <= maxChars)
+        {
+            return trimmed;
+        }
+
+        return trimmed[..Math.Max(1, maxChars - 1)].TrimEnd() + "…";
+    }
+
+    private static string BuildMusicFilter(int width, int height, string? logoPath, string? albumArtPath, bool scanlines, string? alertTickerPath)
     {
         var baseFilter = $"color=c=0x111111:s={width}x{height}:r=30[base]";
         var current = "[base]";
@@ -619,6 +699,16 @@ public class FfmpegCommandBuilder
         if (scanlines)
         {
             baseFilter = baseFilter.Replace("[vout]", "[vtmp];[vtmp]format=yuv420p,geq=lum='if(not(mod(Y,4)),lum(X,Y)*0.82,lum(X,Y))'[vout]");
+        }
+
+        if (HasAlertTicker(alertTickerPath))
+        {
+            var barH = Math.Max(52, height / 18);
+            var font = Math.Max(22, height / 42);
+            var escaped = EscapeFilterPath(alertTickerPath!);
+            baseFilter = baseFilter.Replace("[vout]", "[vpre]")
+                + $";[vpre]drawbox=x=0:y=h-{barH}:w=iw:h={barH}:color=0xc41e3a@0.90:t=fill[vbar]"
+                + $";[vbar]drawtext=textfile='{escaped}':expansion=none:fontcolor=white:fontsize={font}:x=w-mod(t*90\\,w+text_w):y=h-{barH}+{(barH - font) / 2}[vout]";
         }
 
         return baseFilter;
@@ -675,5 +765,12 @@ public class FfmpegCommandBuilder
 
     private static string EscapeMovie(string path) => path.Replace("\\", "/").Replace(":", "\\:");
 
-    private static string EscapeDrawText(string text) => text.Replace("'", "\\'");
+    private static string EscapeFilterPath(string path)
+        => path.Replace('\\', '/').Replace(":", "\\:").Replace("'", "\\'");
+
+    private static string EscapeDrawText(string text)
+        => text.Replace("\\", "\\\\")
+            .Replace("'", "\u2019")
+            .Replace(":", "\\:")
+            .Replace("%", "\\%");
 }

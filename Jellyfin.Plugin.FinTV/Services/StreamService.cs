@@ -221,7 +221,12 @@ public class StreamService
         var offset = Math.Max(0, (DateTime.UtcNow - item.Start).TotalSeconds + item.InPoint.TotalSeconds);
         var duration = Math.Max(1, (item.Finish - DateTime.UtcNow).TotalSeconds);
         var bugPath = ResolveBugPath(channel, item.Start, holidays);
-        var args = _ffmpeg.BuildMediaCommand(channel, inputPath, offset, duration, bugPath);
+        var headline = FilterDefinition.PresetIdsEqual(
+            ChannelAiRules.ExtractLibraryTag(channel.FilterJson),
+            "channelflow-past-tense-news")
+            ? item.Title
+            : null;
+        var args = _ffmpeg.BuildMediaCommand(channel, inputPath, offset, duration, bugPath, headline);
 
         await RunFfmpegToStreamAsync(ffmpegPath, args, output, cancellationToken);
     }

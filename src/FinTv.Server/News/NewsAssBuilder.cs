@@ -3,81 +3,174 @@ using System.Text;
 
 namespace FinTv.News;
 
+internal sealed record NewsStoryBeat(
+    double StartSeconds,
+    double EndSeconds,
+    string Title,
+    string Body,
+    string? ImagePath,
+    bool ShowOnScreen);
+
+internal sealed record NewsImageWindow(string Path, double Start, double End);
+
 public static class NewsAssBuilder
 {
-    public static string Build(
-        string header,
-        IReadOnlyList<NewsArticle> articles,
+    internal static string BuildSpoken(
         int width,
         int height,
-        int durationSeconds,
-        bool showHeader)
+        IReadOnlyList<NewsStoryBeat> beats)
     {
         var playX = width;
         var playY = height;
-        var lines = new StringBuilder();
-        if (showHeader && !string.IsNullOrWhiteSpace(header))
-        {
-            lines.Append(@"{\b1\c&H481DE1&}").Append(Escape(header)).Append(@"{\b0}\N\N");
-        }
+        var events = new StringBuilder();
+        var end = FormatAssTime(beats.Count == 0 ? 1 : beats[^1].EndSeconds);
 
-        foreach (var article in articles)
+        foreach (var beat in beats)
         {
-            lines.Append(@"{\b1\c&HFFFFFF&}").Append(Escape(article.Title)).Append(@"{\b0}\N");
-            if (!string.IsNullOrWhiteSpace(article.Summary))
+            if (!beat.ShowOnScreen || beat.EndSeconds <= beat.StartSeconds)
             {
-                lines.Append(@"{\c&HBBBBBB&}").Append(Escape(article.Summary)).Append(@"\N");
+                continue;
             }
 
-            lines.Append(@"\N");
+            var start = FormatAssTime(beat.StartSeconds);
+            var stop = FormatAssTime(beat.EndSeconds);
+            if (!string.IsNullOrWhiteSpace(beat.ImagePath))
+            {
+                if (!string.IsNullOrWhiteSpace(beat.Title))
+                {
+                    events.Append("Dialogue: 0,")
+                        .Append(start).Append(',').Append(stop)
+                        .Append(",Caption,,0,0,0,,")
+                        .Append(@"{\b1}").Append(Escape(beat.Title)).AppendLine(@"{\b0}");
+                }
+
+                continue;
+            }
+
+            var wrapped = BuildSpokenBlock(beat.Title, beat.Body, width);
+            var lineCount = wrapped.Split("\\N", StringSplitOptions.None).Length;
+            var shouldScroll = lineCount > 7;
+            string text;
+            if (shouldScroll)
+            {
+                var blockHeight = lineCount * 36 + 40;
+                var y1 = playY + 20;
+                var y2 = 70 - blockHeight;
+                var x = playX / 2;
+                text = $"{{\\move({x},{y1},{x},{y2})}}" + wrapped;
+            }
+            else
+            {
+                text = wrapped;
+            }
+
+            events.Append("Dialogue: 0,")
+                .Append(start).Append(',').Append(stop)
+                .Append(shouldScroll ? ",Scroll,,0,0,0,," : ",Story,,0,0,0,,")
+                .AppendLine(text);
         }
 
-        if (articles.Count == 0)
+        if (events.Length == 0)
         {
-            lines.Append(@"{\b1}Add RSS feeds on the News tab.");
+            events.Append("Dialogue: 0,0:00:00.00,").Append(end)
+                .AppendLine(",Story,,0,0,0,,{\\b1}Add RSS feeds on the News tab.");
         }
 
-        var lineCount = Math.Max(4, articles.Count * 3 + 2);
-        var blockHeight = lineCount * 36 + 80;
-        var y1 = playY + blockHeight;
-        var y2 = -blockHeight / 2;
-        var x = playX / 2;
-        var end = FormatAssTime(durationSeconds);
-        var text = $"{{\\move({x},{y1},{x},{y2})}}" + lines;
-
-        return $"""
-            [Script Info]
-            Title: ChannelFlow News
-            ScriptType: v4.00+
-            WrapStyle: 0
-            PlayResX: {playX}
-            PlayResY: {playY}
-
-            [V4+ Styles]
-            Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-            Style: Default, Arial, 28, &H00FFFFFF, &H000000FF, &H00000000, &H80000000, 0, 0, 0, 0, 100, 100, 0, 0, 1, 1, 0, 8, 48, 48, 40, 1
-
-            [Events]
-            Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-            Dialogue: 0,0:00:00.00,{end},Default,,0,0,0,,{text}
-
-            """;
+        var sb = new StringBuilder();
+        sb.AppendLine("[Script Info]");
+        sb.AppendLine("Title: ChannelFlow News");
+        sb.AppendLine("ScriptType: v4.00+");
+        sb.AppendLine("WrapStyle: 0");
+        sb.AppendLine("PlayResX: " + playX);
+        sb.AppendLine("PlayResY: " + playY);
+        sb.AppendLine();
+        sb.AppendLine("[V4+ Styles]");
+        sb.AppendLine("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding");
+        sb.AppendLine("Style: Story, Arial, 28, &H00FFFFFF, &H000000FF, &H00000000, &H80000000, 0, 0, 0, 0, 100, 100, 0, 0, 1, 2, 0, 5, 48, 48, 40, 1");
+        sb.AppendLine("Style: Scroll, Arial, 28, &H00FFFFFF, &H000000FF, &H00000000, &H80000000, 0, 0, 0, 0, 100, 100, 0, 0, 1, 2, 0, 8, 48, 48, 36, 1");
+        sb.AppendLine("Style: Caption, Arial, 26, &H00FFFFFF, &H000000FF, &H00000000, &H80000000, 0, 0, 0, 0, 100, 100, 0, 0, 1, 2, 1, 2, 36, 36, 28, 1");
+        sb.AppendLine();
+        sb.AppendLine("[Events]");
+        sb.AppendLine("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text");
+        sb.Append(events);
+        return sb.ToString();
     }
 
     public static string EscapeAssFilterPath(string path)
         => path.Replace('\\', '/').Replace(":", "\\:").Replace("'", "\\'");
 
-    private static string Escape(string text)
-        => text.Replace("\\", "\\\\").Replace("{", "(").Replace("}", ")").Replace("\r", "").Replace("\n", "\\N");
-
-    private static string FormatAssTime(int seconds)
+    private static string BuildSpokenBlock(string title, string body, int width)
     {
-        var span = TimeSpan.FromSeconds(Math.Max(1, seconds));
+        var maxChars = width > 700 ? 44 : 30;
+        var sb = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            sb.Append(@"{\b1\c&HFFFFFF&}").Append(Escape(title)).Append(@"{\b0}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            if (sb.Length > 0)
+            {
+                sb.Append(@"\N\N");
+            }
+
+            sb.Append(@"{\c&HCCCCCC&}");
+            var first = true;
+            foreach (var line in Wrap(body, maxChars))
+            {
+                if (!first)
+                {
+                    sb.Append(@"\N");
+                }
+
+                sb.Append(Escape(line));
+                first = false;
+            }
+        }
+
+        return sb.Length == 0 ? @"{\b1}ChannelFlow News" : sb.ToString();
+    }
+
+    private static IEnumerable<string> Wrap(string text, int maxChars)
+    {
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var line = new StringBuilder();
+        foreach (var word in words)
+        {
+            if (line.Length > 0 && line.Length + 1 + word.Length > maxChars)
+            {
+                yield return line.ToString();
+                line.Clear();
+            }
+
+            if (line.Length > 0)
+            {
+                line.Append(' ');
+            }
+
+            line.Append(word);
+        }
+
+        if (line.Length > 0)
+        {
+            yield return line.ToString();
+        }
+    }
+
+    private static string Escape(string text)
+        => text.Replace("\\", "\\\\").Replace("{", "(").Replace("}", ")").Replace("\r", "").Replace("\n", " ");
+
+    private static string FormatAssTime(double seconds)
+    {
+        var span = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        var cs = span.Milliseconds / 10;
         return string.Format(
             CultureInfo.InvariantCulture,
-            "{0}:{1:00}:{2:00}.00",
+            "{0}:{1:00}:{2:00}.{3:00}",
             (int)span.TotalHours,
             span.Minutes,
-            span.Seconds);
+            span.Seconds,
+            cs);
     }
 }

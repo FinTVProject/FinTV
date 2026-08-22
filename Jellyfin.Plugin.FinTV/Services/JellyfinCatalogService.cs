@@ -847,10 +847,9 @@ public class JellyfinCatalogService
     }
 
     private static bool IsPastTenseNewsChannel(Channel channel)
-        => string.Equals(
+        => FilterDefinition.PresetIdsEqual(
             ChannelAiRules.ExtractLibraryTag(channel.FilterJson),
-            "channelflow-past-tense-news",
-            StringComparison.OrdinalIgnoreCase);
+            "channelflow-past-tense-news");
 
     private CollectionFolder? ResolveLibraryFolder(string libraryName)
     {
@@ -970,6 +969,25 @@ public class JellyfinCatalogService
         }
 
         var catalogMode = ResolveCatalogMode(channel);
+        if (IsPastTenseNewsChannel(channel))
+        {
+            const string shuffleKey = "past-tense-news";
+            var rng = new Random(HashCode.Combine(channel.PlayoutSeed, DateTime.UtcNow.Year, DateTime.UtcNow.DayOfYear));
+            var shuffled = items
+                .OrderBy(_ => rng.Next())
+                .ThenBy(item => item.Id)
+                .ToList();
+            anchor.SeriesEpisodeIndex.TryGetValue(shuffleKey, out var index);
+            if (index < 0 || index >= shuffled.Count)
+            {
+                index = 0;
+            }
+
+            var pick = shuffled[index];
+            anchor.SeriesEpisodeIndex[shuffleKey] = (index + 1) % shuffled.Count;
+            return [MapItem(pick)];
+        }
+
         var useEpisodeRotation = catalogMode != ChannelCatalogMode.MovieOnly
             && items.Any(i => i is Episode);
 

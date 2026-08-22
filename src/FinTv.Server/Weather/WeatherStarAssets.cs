@@ -77,9 +77,11 @@ public sealed class WeatherStarAssets : IDisposable
     {
         var file = screen switch
         {
-            WeatherStarScreen.Hourly or WeatherStarScreen.HourlyGraph => wide ? "1-chart-wide.png" : "1-chart.png",
-            WeatherStarScreen.Radar => wide ? "7-wide.png" : "7.png",
+            WeatherStarScreen.HourlyGraph or WeatherStarScreen.Travel => wide ? "1-chart-wide.png" : "1-chart.png",
+            WeatherStarScreen.Radar or WeatherStarScreen.Hazards => wide ? "7-wide.png" : "7.png",
             WeatherStarScreen.ExtendedForecast or WeatherStarScreen.LocalForecast => wide ? "4-wide.png" : "4.png",
+            WeatherStarScreen.Regional => "2.png",
+            WeatherStarScreen.SpcOutlook => "6.png",
             _ => wide ? "1-wide.png" : "1.png"
         };
         var root = skin == WeatherStarDockerVariant.Ws3kp ? _ws3Root : _ws4Root;

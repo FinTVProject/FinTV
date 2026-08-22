@@ -50,17 +50,25 @@ public sealed class WeatherCurrent
 
     public double? FeelsLike { get; init; }
 
+    public string? ApparentLabel { get; init; }
+
     public double? Dewpoint { get; init; }
 
     public int? Humidity { get; init; }
 
     public double? WindSpeed { get; init; }
 
+    public double? WindGust { get; init; }
+
     public string? WindDirection { get; init; }
 
     public double? Pressure { get; init; }
 
+    public string? PressureDirection { get; init; }
+
     public double? Visibility { get; init; }
+
+    public double? Ceiling { get; init; }
 
     public string? StationName { get; init; }
 }
@@ -71,9 +79,19 @@ public sealed class WeatherHourly
 
     public double Temperature { get; init; }
 
+    public double? FeelsLike { get; init; }
+
+    public double? Dewpoint { get; init; }
+
+    public double? WindSpeed { get; init; }
+
+    public string? WindDirection { get; init; }
+
     public string IconKey { get; init; } = "No-Data";
 
     public int? PrecipitationChance { get; init; }
+
+    public int? CloudCover { get; init; }
 }
 
 public sealed class WeatherDaily
@@ -86,9 +104,22 @@ public sealed class WeatherDaily
 
     public string Narrative { get; init; } = "";
 
-    public double High { get; init; }
+    public double? High { get; init; }
 
-    public double Low { get; init; }
+    public double? Low { get; init; }
+}
+
+public sealed class WeatherForecastPeriod
+{
+    public string Name { get; init; } = "";
+
+    public string Narrative { get; init; } = "";
+
+    public bool IsDaytime { get; init; }
+
+    public double Temperature { get; init; }
+
+    public string IconKey { get; init; } = "No-Data";
 }
 
 public sealed class WeatherAlert
@@ -96,6 +127,8 @@ public sealed class WeatherAlert
     public string Event { get; init; } = "";
 
     public string Headline { get; init; } = "";
+
+    public string Description { get; init; } = "";
 
     public string Severity { get; init; } = "";
 }
@@ -105,6 +138,43 @@ public sealed class WeatherRadarFrame
     public DateTimeOffset Time { get; init; }
 
     public byte[] Image { get; init; } = [];
+}
+
+public sealed class WeatherStationObservation
+{
+    public string Location { get; init; } = "";
+
+    public double Temperature { get; init; }
+
+    public string Weather { get; init; } = "";
+
+    public string Wind { get; init; } = "";
+
+    public string IconKey { get; init; } = "No-Data";
+
+    public double? Latitude { get; init; }
+
+    public double? Longitude { get; init; }
+}
+
+public sealed class WeatherRegionalCity
+{
+    public string Name { get; init; } = "";
+
+    public string IconKey { get; init; } = "No-Data";
+
+    public double? High { get; init; }
+
+    public double? Low { get; init; }
+}
+
+public sealed class WeatherSpcDay
+{
+    public string DayName { get; init; } = "";
+
+    public string RiskLabel { get; init; } = "NONE";
+
+    public string RiskText { get; init; } = "No Risk";
 }
 
 public sealed class WeatherSnapshot
@@ -126,6 +196,16 @@ public sealed class WeatherSnapshot
     public IReadOnlyList<WeatherAlert> Alerts { get; init; } = [];
 
     public IReadOnlyList<WeatherRadarFrame> Radar { get; init; } = [];
+
+    public IReadOnlyList<WeatherStationObservation> Observations { get; init; } = [];
+
+    public IReadOnlyList<WeatherForecastPeriod> Periods { get; init; } = [];
+
+    public IReadOnlyList<WeatherRegionalCity> Regional { get; init; } = [];
+
+    public IReadOnlyList<WeatherRegionalCity> Travel { get; init; } = [];
+
+    public IReadOnlyList<WeatherSpcDay> SpcOutlook { get; init; } = [];
 
     public DateTimeOffset FetchedAt { get; init; } = DateTimeOffset.UtcNow;
 }

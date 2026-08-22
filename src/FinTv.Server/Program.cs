@@ -98,6 +98,7 @@ builder.Services.AddSingleton<WeatherGeocoder>();
 builder.Services.AddSingleton<WeatherDataClient>();
 builder.Services.AddSingleton<WeatherStarAssets>();
 builder.Services.AddSingleton<WeatherStarCompositor>();
+builder.Services.AddSingleton<WeatherAlertOverlayService>();
 builder.Services.AddSingleton<AiChannelGenerateJobService>();
 builder.Services.AddSingleton<AiLineupAutoApplyTask>();
 builder.Services.AddSingleton<CatalogCleanupTask>();

@@ -737,6 +737,28 @@
                     <div id="weather-zip-list" class="weather-zip-list"></div>
                 </div>
                 <div class="card section-card">
+                    <h3>Alerts on other channels</h3>
+                    <p class="hint">When NOAA has watches or warnings for the default location, show them on TV, movies, and music. WeatherStar and the live news channel keep their own displays.</p>
+                    <label class="field">
+                        <span>Alert display</span>
+                        <select id="weather-alert-overlay-mode" class="emby-select">
+                            <option value="off" selected>Off</option>
+                            <option value="cutin">Switch to the alerts screen every so often</option>
+                            <option value="ticker">Scrolling alert text at the bottom</option>
+                        </select>
+                    </label>
+                    <div id="weather-alert-cutin-fields" class="form-grid hidden">
+                        <label class="field">
+                            <span>How often (minutes)</span>
+                            <input id="weather-alert-cutin-interval" type="number" class="emby-input" min="1" max="180" step="1" value="15">
+                        </label>
+                        <label class="field">
+                            <span>How long (seconds)</span>
+                            <input id="weather-alert-cutin-duration" type="number" class="emby-input" min="5" max="120" step="1" value="20">
+                        </label>
+                    </div>
+                </div>
+                <div class="card section-card">
                     <h3>Display settings</h3>
                     <p class="hint">Choose which WeatherStar screens play in the loop. Location always comes from the ZIP codes above.</p>
                     <h4>Screens</h4>
@@ -925,7 +947,7 @@
             <section id="tab-news" class="tab-panel hidden" hidden>
                 <div class="card section-card">
                     <div class="section-header"><h3>Live news channel</h3></div>
-                    <p class="hint">Apply the <strong>ChannelFlow News</strong> preset (or set a channel to content type News). ChannelFlow-Server fetches RSS, scrolls headlines with an ASS overlay, optionally reads them with TTS, and mixes a Jellyfin music bed into a 24/7 MPEG-TS stream.</p>
+                    <p class="hint">Apply the <strong>ChannelFlow News</strong> preset (or set a channel to content type News). ChannelFlow-Server fetches RSS, scrolls headlines with an ASS overlay, shows story photos when the feed includes them, optionally reads them with TTS, and mixes a Jellyfin music bed into a 24/7 MPEG-TS stream.</p>
                     <label class="field"><span>Header text</span><input id="news-header" type="text" class="emby-input" placeholder="ChannelFlow News"></label>
                     <label class="field"><span>Article count</span><input id="news-count" type="number" min="1" max="30" value="8" class="emby-input"></label>
                     <label class="field"><span>Refresh interval (minutes)</span><input id="news-refresh" type="number" min="2" max="120" value="10" class="emby-input"></label>

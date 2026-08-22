@@ -79,11 +79,6 @@ public class WeatherStarChannelService
         var ffmpegPath = _mediaEncoder.EncoderPath;
         var backgroundMusicPath = ResolveWeatherMusicPath();
         var skin = ResolveVariant(channel);
-        var sequencer = new WeatherStarSequencer(
-            permalinkQuery,
-            skin,
-            channel.AspectRatio != AspectRatioMode.FourThree && (config?.WeatherStarAutoWideForSixteenNine ?? true),
-            channel.ScanlinesEnabled);
 
         WeatherSnapshot snap;
         try
@@ -96,6 +91,14 @@ public class WeatherStarChannelService
             await WriteEbsFallbackAsync(channel, ffmpegPath, output, cancellationToken);
             return;
         }
+
+        var sequencer = new WeatherStarSequencer(
+            permalinkQuery,
+            skin,
+            channel.AspectRatio != AspectRatioMode.FourThree && (config?.WeatherStarAutoWideForSixteenNine ?? true),
+            channel.ScanlinesEnabled,
+            hasAlerts: snap.Alerts.Count > 0,
+            localForecastPages: Math.Clamp(snap.Periods.Count > 0 ? snap.Periods.Count : snap.Daily.Count, 1, 6));
 
         try
         {
@@ -151,6 +154,86 @@ public class WeatherStarChannelService
         {
             _logger.LogWarning(ex, "WeatherStar compositor failed, using EBS slate");
             await WriteEbsFallbackAsync(channel, ffmpegPath, output, cancellationToken);
+        }
+    }
+
+    public async Task StreamHazardsCutInAsync(
+        Domain.Channel channel,
+        Stream output,
+        TimeSpan duration,
+        CancellationToken cancellationToken)
+    {
+        var locationQuery = ResolveDefaultLocationQuery();
+        var config = FinTvRuntime.Current?.Configuration;
+        var source = WeatherDataClient.ParseSource(config?.WeatherSource);
+        var useMetric = PermalinkUsesMetric(config?.WeatherStarPermalinkQuery);
+        WeatherSnapshot snap;
+        try
+        {
+            snap = await _weather.GetSnapshotAsync(locationQuery, source, useMetric, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Weather alert cut-in skipped; snapshot failed");
+            return;
+        }
+
+        if (snap.Alerts.Count == 0)
+        {
+            return;
+        }
+
+        var (width, height) = GetCutInResolution(channel);
+        var skin = string.Equals(config?.WeatherStarVariant, "ws3kp", StringComparison.OrdinalIgnoreCase)
+            ? WeatherStarDockerVariant.Ws3kp
+            : WeatherStarDockerVariant.Ws4kp;
+        var ffmpegPath = _mediaEncoder.EncoderPath;
+        var backgroundMusicPath = ResolveWeatherMusicPath();
+        var durationSeconds = Math.Clamp(duration.TotalSeconds, 5, 120);
+
+        try
+        {
+            using var frameStream = new ScreenshotFrameStream();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            linkedCts.CancelAfter(TimeSpan.FromSeconds(durationSeconds + 2));
+            var ffmpegError = new System.Text.StringBuilder();
+            var ffmpegTask = CliWrap.Cli.Wrap(ffmpegPath)
+                .WithArguments(_ffmpegBuilder.BuildWeatherCommand(width, height, CaptureFps, backgroundMusicPath, durationSeconds))
+                .WithStandardInputPipe(CliWrap.PipeSource.FromStream(frameStream))
+                .WithStandardOutputPipe(CliWrap.PipeTarget.ToStream(output, autoFlush: true))
+                .WithStandardErrorPipe(CliWrap.PipeTarget.ToStringBuilder(ffmpegError))
+                .WithValidation(CliWrap.CommandResultValidation.None)
+                .ExecuteAsync(linkedCts.Token);
+
+            var pumpTask = PumpHazardsFramesAsync(
+                snap,
+                skin,
+                channel.ScanlinesEnabled,
+                width,
+                height,
+                frameStream,
+                durationSeconds,
+                linkedCts.Token);
+            var completed = await Task.WhenAny(ffmpegTask, pumpTask);
+            if (completed == pumpTask)
+            {
+                await pumpTask;
+            }
+
+            linkedCts.Cancel();
+            frameStream.Complete();
+            try
+            {
+                await ffmpegTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // cut-in finished or viewer disconnected
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Weather alert cut-in failed for {Channel}", channel.Name);
         }
     }
 
@@ -356,12 +439,38 @@ public class WeatherStarChannelService
                 }
             }
 
-            var (screen, radarIndex) = sequencer.At(DateTime.UtcNow - started);
-            var jpeg = _compositor.RenderJpeg(current, screen, sequencer.Skin, width, height, sequencer.Scanlines, radarIndex);
+            var (screen, radarIndex, screenRepeat) = sequencer.At(DateTime.UtcNow - started);
+            var jpeg = _compositor.RenderJpeg(current, screen, sequencer.Skin, width, height, sequencer.Scanlines, radarIndex, screenRepeat);
             await frameStream.WriteFrameAsync(jpeg, cancellationToken);
             await Task.Delay(frameDelay, cancellationToken);
         }
     }
+
+    private async Task PumpHazardsFramesAsync(
+        WeatherSnapshot snap,
+        WeatherStarDockerVariant skin,
+        bool scanlines,
+        int width,
+        int height,
+        ScreenshotFrameStream frameStream,
+        double durationSeconds,
+        CancellationToken cancellationToken)
+    {
+        var frameDelay = TimeSpan.FromSeconds(1.0 / CaptureFps);
+        var started = DateTime.UtcNow;
+        var frame = 0;
+        while (!cancellationToken.IsCancellationRequested
+            && (DateTime.UtcNow - started).TotalSeconds < durationSeconds)
+        {
+            var jpeg = _compositor.RenderJpeg(snap, WeatherStarScreen.Hazards, skin, width, height, scanlines, frame / 10);
+            await frameStream.WriteFrameAsync(jpeg, cancellationToken);
+            frame++;
+            await Task.Delay(frameDelay, cancellationToken);
+        }
+    }
+
+    internal static bool PermalinkUsesMetricUnits(string? query)
+        => PermalinkUsesMetric(query);
 
     private static bool PermalinkUsesMetric(string? query)
     {
@@ -393,6 +502,13 @@ public class WeatherStarChannelService
         return channel.AspectRatio == AspectRatioMode.FourThree
             ? (640, 480)
             : (854, 480);
+    }
+
+    private static (int Width, int Height) GetCutInResolution(Domain.Channel channel)
+    {
+        return channel.AspectRatio == AspectRatioMode.FourThree
+            ? (1440, 1080)
+            : (1920, 1080);
     }
 
     private async Task WriteEbsFallbackAsync(

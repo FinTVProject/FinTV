@@ -73,8 +73,15 @@ public class LineupGeneratorService
             var slot = slots.FirstOrDefault(s => s.SlotIndex == slotIndex);
             if (slot is null || slot.Candidates.Count == 0)
             {
-                cursor = cursor.AddMinutes(30);
-                continue;
+                if (IsPastTenseNewsChannel(channel))
+                {
+                    slot = CreatePastTenseNewsSlot(channel, slotIndex);
+                }
+                else
+                {
+                    cursor = cursor.AddMinutes(30);
+                    continue;
+                }
             }
 
             var spanSlots = Math.Clamp(slot.SpanSlots, 1, 8);
@@ -97,6 +104,20 @@ public class LineupGeneratorService
             if (_holidays.IsHolidayChannel(channel) && _holidays.GetActiveHoliday(date) is null)
             {
                 await AddHolidayOfflineBlockAsync(channel, slotStart, blockEnd, cancellationToken);
+                cursor = blockEnd;
+                continue;
+            }
+
+            if (IsPastTenseNewsChannel(channel))
+            {
+                await PackPastTenseNewsBlockAsync(
+                    channel,
+                    CreatePastTenseNewsSlot(channel, slotIndex),
+                    date,
+                    anchor,
+                    slotStart,
+                    blockEnd,
+                    cancellationToken);
                 cursor = blockEnd;
                 continue;
             }
@@ -266,5 +287,74 @@ public class LineupGeneratorService
         });
 
         return Task.CompletedTask;
+    }
+
+    private static bool IsPastTenseNewsChannel(Channel channel)
+        => FilterDefinition.PresetIdsEqual(
+            ChannelAiRules.ExtractLibraryTag(channel.FilterJson),
+            "channelflow-past-tense-news");
+
+    private static LineupSlot CreatePastTenseNewsSlot(Channel channel, int slotIndex)
+        => new()
+        {
+            SlotIndex = slotIndex,
+            SpanSlots = 1,
+            Candidates =
+            [
+                new SlotCandidate
+                {
+                    Kind = SlotCandidateKind.FilterQuery,
+                    FilterJson = string.IsNullOrWhiteSpace(channel.FilterJson) ? "{}" : channel.FilterJson,
+                    Weight = 10,
+                    SortOrder = 0
+                }
+            ]
+        };
+
+    private async Task PackPastTenseNewsBlockAsync(
+        Channel channel,
+        LineupSlot slot,
+        DateOnly date,
+        PlayoutAnchorState anchor,
+        DateTime slotStart,
+        DateTime blockEnd,
+        CancellationToken cancellationToken)
+    {
+        var fillStart = slotStart;
+        var packed = 0;
+        while (fillStart < blockEnd - TimeSpan.FromSeconds(8) && packed < 24)
+        {
+            var picked = await _smartSelection.PickCandidateAsync(channel, slot, date, anchor, cancellationToken);
+            if (picked is null)
+            {
+                break;
+            }
+
+            var clipDuration = picked.Duration > TimeSpan.Zero ? picked.Duration : TimeSpan.FromMinutes(4);
+            var fillEnd = fillStart + clipDuration;
+            if (fillEnd > blockEnd)
+            {
+                fillEnd = blockEnd;
+            }
+
+            _db.PlayoutItems.Add(new PlayoutItem
+            {
+                ChannelId = channel.Id,
+                JellyfinItemId = picked.JellyfinItemId,
+                Start = fillStart,
+                Finish = fillEnd,
+                Title = picked.Title
+            });
+            _db.PlayoutHistory.Add(new PlayoutHistoryEntry
+            {
+                ChannelId = channel.Id,
+                JellyfinItemId = picked.JellyfinItemId,
+                AiredAt = fillStart,
+                Title = picked.Title
+            });
+            await _commercialService.InsertCommercialsAsync(channel, picked, fillStart, fillEnd, cancellationToken);
+            fillStart = fillEnd;
+            packed++;
+        }
     }
 }

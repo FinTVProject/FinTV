@@ -16,17 +16,20 @@ public class StreamService
     private readonly ConcurrentDictionary<Guid, int> _activeStreams = new();
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly FfmpegCommandBuilder _ffmpeg;
+    private readonly WeatherAlertOverlayService _weatherAlerts;
     private readonly ILogger<StreamService> _logger;
     private readonly IFfmpegLocator _mediaEncoder;
 
     public StreamService(
         IServiceScopeFactory scopeFactory,
         FfmpegCommandBuilder ffmpeg,
+        WeatherAlertOverlayService weatherAlerts,
         ILogger<StreamService> logger,
         IFfmpegLocator mediaEncoder)
     {
         _scopeFactory = scopeFactory;
         _ffmpeg = ffmpeg;
+        _weatherAlerts = weatherAlerts;
         _logger = logger;
         _mediaEncoder = mediaEncoder;
     }
@@ -70,10 +73,27 @@ public class StreamService
         }
 
         var ffmpegPath = _mediaEncoder.EncoderPath;
+        var alertSession = new WeatherAlertCutInSession();
 
         while (!cancellationToken.IsCancellationRequested)
         {
             var started = DateTime.UtcNow;
+            if (await _weatherAlerts.ShouldCutInNowAsync(channel, alertSession, cancellationToken))
+            {
+                try
+                {
+                    await weather.StreamHazardsCutInAsync(channel, output, _weatherAlerts.CutInDuration, cancellationToken);
+                    _weatherAlerts.MarkCutInComplete(alertSession);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Weather alert cut-in failed for {Channel}", channel.Name);
+                    _weatherAlerts.MarkCutInComplete(alertSession);
+                }
+
+                continue;
+            }
+
             var current = await GetCurrentItemAsync(channelId, cancellationToken);
             if (current is not null)
             {
@@ -89,7 +109,7 @@ public class StreamService
                     }
                     else if (current.JellyfinItemId.HasValue)
                     {
-                        await StreamMediaItemAsync(channel, current, catalog, holidays, ffmpegPath, output, cancellationToken);
+                        await StreamMediaItemAsync(channel, current, catalog, holidays, ffmpegPath, output, alertSession, cancellationToken);
                     }
                     else
                     {
@@ -254,6 +274,7 @@ public class StreamService
         HolidayChannelService holidays,
         string ffmpegPath,
         Stream output,
+        WeatherAlertCutInSession alertSession,
         CancellationToken cancellationToken)
     {
         using var scope = _scopeFactory.CreateScope();
@@ -272,8 +293,11 @@ public class StreamService
 
         var offset = Math.Max(0, (DateTime.UtcNow - item.Start).TotalSeconds + item.InPoint.TotalSeconds);
         var duration = Math.Max(1, (item.Finish - DateTime.UtcNow).TotalSeconds);
+        duration = await _weatherAlerts.CapMediaDurationAsync(channel, alertSession, duration, cancellationToken);
         var bugPath = ResolveBugPath(channel, item.Start, holidays);
-        var args = _ffmpeg.BuildMediaCommand(channel, inputPath, offset, duration, bugPath);
+        var headline = PastTenseNewsCatalog.IsPastTenseNewsChannel(channel) ? item.Title : null;
+        var tickerPath = await _weatherAlerts.PrepareTickerFileAsync(channel, cancellationToken);
+        var args = _ffmpeg.BuildMediaCommand(channel, inputPath, offset, duration, bugPath, headline, tickerPath);
 
         await RunFfmpegToStreamAsync(ffmpegPath, args, output, cancellationToken);
     }
@@ -354,7 +378,8 @@ public class StreamService
         }
 
         var albumArt = catalog.GetPrimaryImagePath(mediaItem);
-        var args = _ffmpeg.BuildMusicCommand(channel, inputPath, albumArt);
+        var tickerPath = await _weatherAlerts.PrepareTickerFileAsync(channel, cancellationToken);
+        var args = _ffmpeg.BuildMusicCommand(channel, inputPath, albumArt, tickerPath);
         await RunFfmpegToStreamAsync(ffmpegPath, args, output, cancellationToken);
     }
 

@@ -65,6 +65,21 @@ public class PluginConfiguration
 
     public string WeatherMusicLibraryName { get; set; } = "Background Music";
 
+    /// <summary>
+    /// How weather alerts appear on non-weather channels: <c>off</c>, <c>cutin</c>, or <c>ticker</c>.
+    /// </summary>
+    public string WeatherAlertOverlayMode { get; set; } = "off";
+
+    /// <summary>
+    /// Minutes between WeatherStar alert-screen cut-ins on other channels.
+    /// </summary>
+    public int WeatherAlertCutInIntervalMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// Seconds to show the WeatherStar alerts screen during a cut-in.
+    /// </summary>
+    public int WeatherAlertCutInDurationSeconds { get; set; } = 20;
+
     public BlackframeTaskState BlackframeTaskState { get; set; } = new();
 
     public CommercialBrainzSettings CommercialBrainz { get; set; } = new();
